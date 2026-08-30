@@ -1,0 +1,143 @@
+/*
+ * Druckausgabe: A4 quer, nur der Sitzplan bzw. die Namensliste.
+ *
+ * Bewusst über den Browser-Druck statt über eine PDF-Bibliothek — das Ergebnis ist
+ * echte Vektorgrafik, gestochen scharf, und die Anwendung braucht keine zusätzliche
+ * Abhängigkeit.
+ */
+
+@page {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  /* Alles ausblenden, was nicht auf das Blatt gehört. */
+  .masthead,
+  .steps,
+  .site-footer,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .app {
+    max-width: none;
+    padding: 0;
+  }
+
+  .panel {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    background: none;
+  }
+
+  .print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1pt solid #000;
+    padding-bottom: 4pt;
+    margin-bottom: 10pt;
+  }
+
+  .print-header h2 {
+    margin: 0;
+    font-size: 14pt;
+  }
+
+  .print-header .meta {
+    font-size: 9pt;
+    color: #444;
+  }
+
+  .room {
+    --seat-w: 30mm;
+    --seat-h: 16mm;
+    gap: 2mm;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .board {
+    border-bottom: 2pt solid #000;
+    color: #000;
+    font-size: 9pt;
+  }
+
+  .seat {
+    border: 0.6pt solid #333;
+    background: none !important;
+    color: #000;
+    font-size: 10pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .seat .name {
+    font-size: 11pt;
+  }
+
+  .seat .seat-tags,
+  .seat .pin-toggle {
+    display: none;
+  }
+
+  .seat.empty {
+    border-style: dashed;
+  }
+
+  /* Farbcodierung im Ausdruck als dezente Randstärke statt als Fläche —
+     sie soll auf Schwarzweißdruckern nicht als grauer Block erscheinen. */
+  .seat.rank-0 {
+    border-left: 2.5pt solid #000;
+  }
+  .seat.rank-1 {
+    border-left: 1.5pt dashed #000;
+  }
+  .seat.rank-none {
+    border-left: 0.6pt dotted #000;
+  }
+
+  /* Der Sitzplan gehört allein auf das erste Blatt; die Namensliste folgt danach. */
+  .report-panel {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  table {
+    font-size: 10pt;
+  }
+
+  th,
+  td {
+    border-bottom: 0.4pt solid #999;
+  }
+
+  tbody tr:hover {
+    background: none;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+}
