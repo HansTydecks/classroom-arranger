@@ -6,15 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { defaultRoomConfig } from '../domain/roomTemplates';
 import { clearAll, loadClass, saveClass } from './persistence';
-import type {
-  ClassData,
-  RoomConfig,
-  Separation,
-  SpecialKind,
-  SpecialRequest,
-  Student,
-  Weights,
-} from '../types/model';
+import type { ClassData, RoomConfig, SpecialRequest, Student, Weights } from '../types/model';
 import { DEFAULT_WEIGHTS, MAX_WISHES } from '../types/model';
 
 export function emptyClass(): ClassData {
@@ -38,19 +30,32 @@ function newId(): string {
  * Ergänzt fehlende Felder aus älteren Ständen, damit ein gespeicherter Datensatz
  * nach einer Erweiterung des Modells nicht die Anwendung lahmlegt.
  */
-function migrate(stored: ClassData): ClassData {
+export function migrate(stored: ClassData): ClassData {
   const base = emptyClass();
+  const students: Student[] = (stored.students ?? []).map((student) => ({
+    ...student,
+    wishes: student.wishes ?? [],
+    specials: [...(student.specials ?? [])],
+  }));
+
+  // Trennungen waren früher eine eigene Liste; heute sind sie Regeln am Kind.
+  for (const separation of stored.separations ?? []) {
+    const holder = students.find((student) => student.id === separation.a);
+    if (!holder || !students.some((student) => student.id === separation.b)) continue;
+    const kind = separation.radius === 'adjacent' ? 'notNextTo' : 'notSameTable';
+    const exists = holder.specials.some(
+      (rule) => rule.kind === kind && rule.target === separation.b,
+    );
+    if (!exists) holder.specials.push({ kind, hard: true, target: separation.b });
+  }
+
   return {
     ...base,
     ...stored,
     room: { ...base.room, ...stored.room },
     weights: { ...base.weights, ...stored.weights },
-    students: (stored.students ?? []).map((student) => ({
-      ...student,
-      wishes: student.wishes ?? [],
-      specials: student.specials ?? [],
-    })),
-    separations: stored.separations ?? [],
+    students,
+    separations: [],
   };
 }
 
@@ -67,13 +72,11 @@ export interface ClassStore {
   updateStudent(id: string, patch: Partial<Student>): void;
   removeStudent(id: string): void;
   setWish(id: string, rank: number, targetId: string | null): void;
-  toggleSpecial(id: string, kind: SpecialKind): void;
-  setSpecialHard(id: string, kind: SpecialKind, hard: boolean): void;
-  setSpecialRow(id: string, kind: SpecialKind, row: number): void;
+  addRule(id: string, rule: SpecialRequest): void;
+  updateRule(id: string, index: number, patch: Partial<SpecialRequest>): void;
+  removeRule(id: string, index: number): void;
   setPinnedSeat(id: string, seatId: string | undefined): void;
   clearPins(): void;
-  addSeparation(separation: Separation): void;
-  removeSeparation(index: number): void;
   replaceAll(data: ClassData): void;
   reset(): Promise<void>;
 }
@@ -117,18 +120,6 @@ export function useClassStore(): ClassStore {
       }));
     },
     [update],
-  );
-
-  const patchSpecial = useCallback(
-    (id: string, kind: SpecialKind, change: (special: SpecialRequest) => SpecialRequest) => {
-      patchStudent(id, (student) => ({
-        ...student,
-        specials: student.specials.map((special) =>
-          special.kind === kind ? change(special) : special,
-        ),
-      }));
-    },
-    [patchStudent],
   );
 
   return useMemo<ClassStore>(
@@ -179,6 +170,7 @@ export function useClassStore(): ClassStore {
             .map((student) => ({
               ...student,
               wishes: student.wishes.map((wish) => (wish === id ? '' : wish)),
+              specials: student.specials.filter((rule) => rule.target !== id),
             })),
           separations: current.separations.filter((sep) => sep.a !== id && sep.b !== id),
         })),
@@ -191,27 +183,20 @@ export function useClassStore(): ClassStore {
           return { ...student, wishes };
         }),
 
-      toggleSpecial: (id, kind) =>
-        patchStudent(id, (student) => {
-          const existing = student.specials.find((special) => special.kind === kind);
-          return {
-            ...student,
-            specials: existing
-              ? student.specials.filter((special) => special.kind !== kind)
-              : [
-                  ...student.specials,
-                  kind === 'maxRow'
-                    ? { kind, hard: false, row: 1 }
-                    : { kind, hard: false },
-                ],
-          };
-        }),
+      addRule: (id, rule) =>
+        patchStudent(id, (student) => ({ ...student, specials: [...student.specials, rule] })),
 
-      setSpecialHard: (id, kind, hard) =>
-        patchSpecial(id, kind, (special) => ({ ...special, hard })),
+      updateRule: (id, index, patch) =>
+        patchStudent(id, (student) => ({
+          ...student,
+          specials: student.specials.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)),
+        })),
 
-      setSpecialRow: (id, kind, row) =>
-        patchSpecial(id, kind, (special) => ({ ...special, row })),
+      removeRule: (id, index) =>
+        patchStudent(id, (student) => ({
+          ...student,
+          specials: student.specials.filter((_, i) => i !== index),
+        })),
 
       setPinnedSeat: (id, seatId) =>
         patchStudent(id, (student) => {
@@ -231,23 +216,6 @@ export function useClassStore(): ClassStore {
           }),
         })),
 
-      addSeparation: (separation) =>
-        update((current) =>
-          current.separations.some(
-            (existing) =>
-              (existing.a === separation.a && existing.b === separation.b) ||
-              (existing.a === separation.b && existing.b === separation.a),
-          )
-            ? current
-            : { ...current, separations: [...current.separations, separation] },
-        ),
-
-      removeSeparation: (index) =>
-        update((current) => ({
-          ...current,
-          separations: current.separations.filter((_, i) => i !== index),
-        })),
-
       replaceAll: (next) => update(() => migrate(next)),
 
       reset: async () => {
@@ -256,6 +224,6 @@ export function useClassStore(): ClassStore {
         await clearAll();
       },
     }),
-    [data, ready, update, patchStudent, patchSpecial],
+    [data, ready, update, patchStudent],
   );
 }

@@ -84,23 +84,41 @@ export interface RoomLayout {
 // ---------------------------------------------------------------------------
 
 export type SpecialKind =
-  | 'front'   // möchte weit vorne sitzen
-  | 'notBack' // möchte nicht in der letzten Reihe sitzen
-  | 'window'  // möchte am Fenster sitzen
-  | 'aisle'   // möchte am Gang sitzen
-  | 'notDoor' // möchte nicht neben der Tür sitzen
-  | 'maxRow'; // höchstens bis Reihe N (für Attest / Nachteilsausgleich)
+  // Lage im Raum
+  | 'front'     // möchte weit vorne sitzen
+  | 'notBack'   // möchte nicht in der letzten Reihe sitzen
+  | 'back'      // möchte weit hinten sitzen
+  | 'maxRow'    // höchstens bis Reihe N (für Attest / Nachteilsausgleich)
+  | 'minRow'    // frühestens ab Reihe N (z. B. sehr große Kinder)
+  | 'leftSide'  // möchte auf der linken Raumhälfte sitzen
+  | 'rightSide' // möchte auf der rechten Raumhälfte sitzen
+  | 'center'    // möchte in der Raummitte sitzen
+  // Platzeigenschaften
+  | 'window'    // möchte am Fenster sitzen
+  | 'notWindow' // möchte nicht am Fenster sitzen (Blendung, Zugluft)
+  | 'aisle'     // möchte am Gang sitzen
+  | 'notAisle'  // möchte nicht am Gang sitzen
+  | 'nearDoor'  // möchte nah an der Tür sitzen
+  | 'notDoor'   // möchte nicht neben der Tür sitzen
+  // Beziehung zu einem anderen Kind (`target`)
+  | 'notNextTo'    // nicht direkt neben dem Kind
+  | 'notSameTable' // nicht am selben Tisch wie das Kind
+  | 'nextTo'       // direkt neben dem Kind
+  | 'sameTable';   // am selben Tisch wie das Kind
 
 export interface SpecialRequest {
   kind: SpecialKind;
   /**
-   * Harte Sonderwünsche schränken die erlaubten Plätze vorab ein und können vom
-   * Solver nicht verletzt werden (Attest, Sehschwäche, Nachteilsausgleich).
-   * Weiche fließen nur als Bonus in die Bewertung ein.
+   * Harte Regeln müssen eingehalten werden: Bei Platzregeln schränken sie die
+   * erlaubten Plätze vorab ein, bei Trennungen werden unzulässige Züge gar nicht
+   * erst erzeugt (Attest, Sehschwäche, Nachteilsausgleich). Weiche Regeln fließen
+   * nur als Bonus bzw. Malus in die Bewertung ein.
    */
   hard: boolean;
-  /** Nur für `maxRow`: höchste erlaubte Reihe, 0-basiert. */
+  /** Nur für `maxRow` und `minRow`: Grenzreihe, 0-basiert. */
   row?: number;
+  /** Nur für Beziehungsregeln: ID des anderen Kindes. */
+  target?: string;
 }
 
 export interface Student {
@@ -176,6 +194,11 @@ export interface ClassData {
   name: string;
   room: RoomConfig;
   students: Student[];
+  /**
+   * Ältere Datensätze: Trennungen als eigene Liste. Beim Laden werden sie in
+   * Regeln am Kind (`notNextTo` / `notSameTable`) überführt; der Solver versteht
+   * beide Formen.
+   */
   separations: Separation[];
   weights: Weights;
   nameDisplay: NameDisplay;

@@ -1,186 +1,72 @@
 /**
- * Schritt 3: Wünsche, Sonderwünsche und Trennungen erfassen.
+ * Schritt 3: Wünsche und Regeln erfassen.
+ *
+ * Regeln werden je Kind aus einem nach Themen gegliederten Auswahlmenü hinzugefügt.
+ * Jede Regel ist entweder „weich“ (ein Wunsch, den der Algorithmus nach Möglichkeit
+ * erfüllt) oder „hart“ (wird nie verletzt).
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { buildLabels } from '../domain/names';
 import { buildRoom } from '../domain/roomTemplates';
+import { isDuplicate, isPairRule, isRowRule, newRule, RULE_GROUPS } from '../domain/rules';
+import { useI18n } from '../i18n/I18nContext';
 import type { ClassStore } from '../state/store';
 import type { SpecialKind, Student } from '../types/model';
 import { MAX_WISHES } from '../types/model';
 
-const SPECIAL_LABELS: Record<SpecialKind, string> = {
-  front: 'vorne',
-  notBack: 'nicht hinten',
-  window: 'Fenster',
-  aisle: 'Gang',
-  notDoor: 'nicht an der Tür',
-  maxRow: 'höchstens Reihe',
-};
-
-const SPECIAL_ORDER: SpecialKind[] = ['front', 'notBack', 'window', 'aisle', 'notDoor', 'maxRow'];
-
-const WISH_LABELS = ['Erstwunsch', 'Zweitwunsch', 'Drittwunsch'];
+const WISH_KEYS = ['wishes.first', 'wishes.second', 'wishes.third'];
 
 export function WishEditor({ store }: { store: ClassStore }) {
-  const { students, separations, nameDisplay } = store.data;
+  const { t } = useI18n();
+  const { students, nameDisplay } = store.data;
   const labels = useMemo(() => buildLabels(students, nameDisplay), [students, nameDisplay]);
   const tableRowCount = buildRoom(store.data.room).tableRowCount;
 
-  const [separationA, setSeparationA] = useState('');
-  const [separationB, setSeparationB] = useState('');
-  const [separationRadius, setSeparationRadius] = useState<'adjacent' | 'table'>('table');
-
-  const label = (id: string) => labels.get(id) ?? '(unbekannt)';
+  const label = (id: string) => labels.get(id) ?? t('common.unknown');
 
   if (students.length === 0) {
     return (
       <div className="panel">
-        <h2>Wünsche &amp; Regeln</h2>
-        <p className="hint">Erfassen Sie zuerst die Namen der Klasse.</p>
+        <h2>{t('wishes.title')}</h2>
+        <p className="hint">{t('wishes.empty')}</p>
       </div>
     );
   }
 
-  const addSeparation = () => {
-    if (!separationA || !separationB || separationA === separationB) return;
-    store.addSeparation({ a: separationA, b: separationB, radius: separationRadius });
-    setSeparationA('');
-    setSeparationB('');
-  };
-
   return (
-    <>
-      <div className="panel">
-        <h2>Wünsche und Sonderwünsche</h2>
-        <p className="hint">
-          Sonderwünsche als <strong>hart</strong> zu markieren bedeutet: Der Algorithmus wird sie
-          nie verletzen. Das ist für Attest, Sehschwäche oder Nachteilsausgleich gedacht — je mehr
-          harte Vorgaben, desto weniger Spielraum bleibt für die Sitznachbar-Wünsche.
-        </p>
+    <div className="panel">
+      <h2>{t('wishes.heading')}</h2>
+      <p className="hint">{t('wishes.intro')}</p>
+      <p className="hint">{t('wishes.hardHint')}</p>
 
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                {WISH_LABELS.slice(0, MAX_WISHES).map((wishLabel) => (
-                  <th key={wishLabel}>{wishLabel}</th>
-                ))}
-                <th>Sonderwünsche</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((student) => (
-                <StudentRow
-                  key={student.id}
-                  student={student}
-                  students={students}
-                  label={label}
-                  store={store}
-                  tableRowCount={tableRowCount}
-                />
+      <div className="table-scroll">
+        <table className="rules-table">
+          <thead>
+            <tr>
+              <th>{t('common.name')}</th>
+              {WISH_KEYS.slice(0, MAX_WISHES).map((key) => (
+                <th key={key}>{t(key)}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
+              <th>{t('wishes.rules')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((student) => (
+              <StudentRow
+                key={student.id}
+                student={student}
+                students={students}
+                label={label}
+                store={store}
+                tableRowCount={tableRowCount}
+              />
+            ))}
+          </tbody>
+        </table>
       </div>
-
-      <div className="panel">
-        <h2>Trennungen</h2>
-        <p className="hint">
-          Diese beiden sollen nicht nebeneinander sitzen. Trennungen sind immer bindend — der
-          Sitzplan wird sie unter keinen Umständen verletzen.
-        </p>
-
-        <div className="field-row" style={{ alignItems: 'flex-end', marginBottom: 14 }}>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label htmlFor="sepA">Person</label>
-            <select id="sepA" value={separationA} onChange={(e) => setSeparationA(e.target.value)}>
-              <option value="">— auswählen —</option>
-              {students.map((student) => (
-                <option key={student.id} value={student.id}>
-                  {label(student.id)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label htmlFor="sepB">und</label>
-            <select id="sepB" value={separationB} onChange={(e) => setSeparationB(e.target.value)}>
-              <option value="">— auswählen —</option>
-              {students
-                .filter((student) => student.id !== separationA)
-                .map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {label(student.id)}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label htmlFor="sepRadius">Abstand</label>
-            <select
-              id="sepRadius"
-              value={separationRadius}
-              onChange={(e) => setSeparationRadius(e.target.value as 'adjacent' | 'table')}
-            >
-              <option value="adjacent">nicht direkt nebeneinander</option>
-              <option value="table">nicht am selben Tisch</option>
-            </select>
-          </div>
-          <div className="field" style={{ marginBottom: 0, flex: '0 0 auto' }}>
-            <button
-              type="button"
-              className="button primary"
-              onClick={addSeparation}
-              disabled={!separationA || !separationB || separationA === separationB}
-            >
-              Trennung hinzufügen
-            </button>
-          </div>
-        </div>
-
-        {separations.length === 0 ? (
-          <p className="hint">Keine Trennungen festgelegt.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Trennung</th>
-                <th>Abstand</th>
-                <th style={{ width: '4em' }} />
-              </tr>
-            </thead>
-            <tbody>
-              {separations.map((separation, index) => (
-                <tr key={`${separation.a}-${separation.b}-${index}`}>
-                  <td>
-                    {label(separation.a)} &nbsp;↮&nbsp; {label(separation.b)}
-                  </td>
-                  <td className="hint">
-                    {separation.radius === 'adjacent'
-                      ? 'nicht direkt nebeneinander'
-                      : 'nicht am selben Tisch'}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="button danger"
-                      onClick={() => store.removeSeparation(index)}
-                      aria-label="Trennung entfernen"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -193,11 +79,13 @@ interface StudentRowProps {
 }
 
 function StudentRow({ student, students, label, store, tableRowCount }: StudentRowProps) {
+  const { t } = useI18n();
   const others = students.filter((other) => other.id !== student.id);
+  const defaultTarget = others[0]?.id;
 
   return (
     <tr>
-      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{label(student.id)}</td>
+      <td className="student-name">{label(student.id)}</td>
 
       {Array.from({ length: MAX_WISHES }, (_, rank) => {
         const current = student.wishes[rank] ?? '';
@@ -210,7 +98,7 @@ function StudentRow({ student, students, label, store, tableRowCount }: StudentR
           <td key={rank}>
             <select
               value={current}
-              aria-label={`${WISH_LABELS[rank]} von ${label(student.id)}`}
+              aria-label={t('wishes.wishOf', { rank: t(WISH_KEYS[rank]!), name: label(student.id) })}
               onChange={(event) => store.setWish(student.id, rank, event.target.value || null)}
             >
               <option value="">—</option>
@@ -226,63 +114,96 @@ function StudentRow({ student, students, label, store, tableRowCount }: StudentR
         );
       })}
 
-      <td>
-        <div className="chips">
-          {SPECIAL_ORDER.map((kind) => {
-            const active = student.specials.find((special) => special.kind === kind);
-            return (
-              <span key={kind} style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className={`chip${active?.hard ? ' hard' : ''}`}
-                  aria-pressed={Boolean(active)}
-                  onClick={() => store.toggleSpecial(student.id, kind)}
-                  title={
-                    active
-                      ? 'Sonderwunsch entfernen'
-                      : `Sonderwunsch „${SPECIAL_LABELS[kind]}“ hinzufügen`
+      <td className="rules-cell">
+        <ul className="rule-list">
+          {student.specials.map((rule, index) => (
+            <li key={`${rule.kind}-${index}`} className={`rule${rule.hard ? ' hard' : ''}`}>
+              <span className="rule-name">{t(`rule.${rule.kind}.short`)}</span>
+
+              {isRowRule(rule.kind) && (
+                <select
+                  value={rule.row ?? 1}
+                  aria-label={t('wishes.rowLimit')}
+                  onChange={(event) =>
+                    store.updateRule(student.id, index, { row: Number(event.target.value) })
                   }
                 >
-                  {SPECIAL_LABELS[kind]}
-                  {kind === 'maxRow' && active ? ` ${(active.row ?? 1) + 1}` : ''}
-                </button>
+                  {Array.from({ length: tableRowCount }, (_, row) => (
+                    <option key={row} value={row}>
+                      {t('wishes.rowNumber', { row: row + 1 })}
+                    </option>
+                  ))}
+                </select>
+              )}
 
-                {active && kind === 'maxRow' && (
-                  <select
-                    value={active.row ?? 1}
-                    aria-label="Höchste erlaubte Reihe"
-                    style={{ width: 'auto', padding: '1px 4px', fontSize: '0.78rem' }}
-                    onChange={(event) =>
-                      store.setSpecialRow(student.id, kind, Number(event.target.value))
-                    }
-                  >
-                    {Array.from({ length: tableRowCount }, (_, row) => (
-                      <option key={row} value={row}>
-                        {row + 1}
-                      </option>
-                    ))}
-                  </select>
-                )}
+              {isPairRule(rule.kind) && (
+                <select
+                  value={rule.target ?? ''}
+                  aria-label={t('wishes.ruleTarget')}
+                  onChange={(event) =>
+                    store.updateRule(student.id, index, { target: event.target.value })
+                  }
+                >
+                  {!rule.target && <option value="">—</option>}
+                  {others.map((other) => (
+                    <option key={other.id} value={other.id}>
+                      {label(other.id)}
+                    </option>
+                  ))}
+                </select>
+              )}
 
-                {active && (
-                  <button
-                    type="button"
-                    className="chip"
-                    aria-pressed={active.hard}
-                    onClick={() => store.setSpecialHard(student.id, kind, !active.hard)}
-                    title={
-                      active.hard
-                        ? 'Harte Vorgabe — wird nie verletzt. Klicken, um sie zu einem Wunsch zu machen.'
-                        : 'Weicher Wunsch. Klicken, um ihn verbindlich zu machen.'
-                    }
-                  >
-                    {active.hard ? 'hart' : 'weich'}
-                  </button>
-                )}
-              </span>
-            );
-          })}
-        </div>
+              <button
+                type="button"
+                className="rule-strength"
+                aria-pressed={rule.hard}
+                onClick={() => store.updateRule(student.id, index, { hard: !rule.hard })}
+                title={rule.hard ? t('wishes.hardTitle') : t('wishes.softTitle')}
+              >
+                {rule.hard ? t('wishes.hard') : t('wishes.soft')}
+              </button>
+
+              <button
+                type="button"
+                className="rule-remove"
+                onClick={() => store.removeRule(student.id, index)}
+                aria-label={t('wishes.removeRule', { rule: t(`rule.${rule.kind}.short`) })}
+                title={t('wishes.removeRule', { rule: t(`rule.${rule.kind}.short`) })}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <select
+          className="rule-add"
+          value=""
+          aria-label={t('wishes.addRuleFor', { name: label(student.id) })}
+          onChange={(event) => {
+            const kind = event.target.value as SpecialKind;
+            if (!kind) return;
+            const target = isPairRule(kind) ? defaultTarget : undefined;
+            store.addRule(student.id, newRule(kind, target));
+          }}
+        >
+          <option value="">{t('wishes.addRule')}</option>
+          {RULE_GROUPS.map((group) => (
+            <optgroup key={group.id} label={t(`rule.group.${group.id}`)}>
+              {group.kinds.map((kind) => (
+                <option
+                  key={kind}
+                  value={kind}
+                  disabled={
+                    isDuplicate(student.specials, kind) || (isPairRule(kind) && !defaultTarget)
+                  }
+                >
+                  {t(`rule.${kind}.name`)}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </td>
     </tr>
   );

@@ -40,13 +40,8 @@ export const TEMPLATE_DEFAULTS: Record<RoomConfig['template'], Partial<RoomConfi
   uShape: { rowCount: 4, tablesPerRow: 3, seatsPerTable: 2 },
 };
 
-export const TEMPLATE_LABELS: Record<RoomConfig['template'], string> = {
-  rows: 'Frontalreihen (Einzeltische)',
-  doubleRows: 'Doppelreihen (2er-Tische)',
-  groups4: '4er-Gruppentische',
-  groups6: '6er-Gruppentische',
-  uShape: 'U-Form',
-};
+/** Reihenfolge der Vorlagen im Auswahlmenü; die Bezeichnungen stehen in `i18n/locales`. */
+export const TEMPLATE_IDS = Object.keys(TEMPLATE_DEFAULTS) as Array<RoomConfig['template']>;
 
 export function defaultRoomConfig(): RoomConfig {
   return {

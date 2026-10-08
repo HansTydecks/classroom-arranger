@@ -58,7 +58,7 @@ export function useSolver() {
     };
 
     worker.onerror = (event) =>
-      setStatus({ kind: 'error', message: event.message || 'Unbekannter Fehler im Solver.' });
+      setStatus({ kind: 'error', message: event.message || 'Solver error' });
 
     workerRef.current = worker;
     return () => {

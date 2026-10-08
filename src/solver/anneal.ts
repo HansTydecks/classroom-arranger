@@ -9,7 +9,7 @@
  * Unzulässige Züge (harte Regeln) liefern `null` und werden übersprungen.
  */
 
-import { EMPTY, Evaluator } from './objective';
+import { EMPTY, Evaluator, MUST_NEAR_PENALTY } from './objective';
 import type { Rng } from './random';
 
 /** Anteil der Züge, die eine Dreier-Rotation versuchen. */
@@ -43,7 +43,8 @@ function calibrateTemperature(ev: Evaluator, rng: Rng, samples = 200): number {
   for (let s = 0; s < samples; s++) {
     const delta = randomMove(ev, rng);
     if (delta === null) continue;
-    if (delta < 0) {
+    // Verstöße gegen harte Nachbarregeln würden die Temperatur verzerren.
+    if (delta < 0 && -delta < MUST_NEAR_PENALTY / 2) {
       sum += -delta;
       count++;
     }

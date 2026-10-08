@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { buildLabels } from '../domain/names';
 import { buildRoom } from '../domain/roomTemplates';
+import { useI18n } from '../i18n/I18nContext';
 import { ReportPanel } from './ReportPanel';
 import { SeatGrid } from './SeatGrid';
 import type { SeatOccupant } from './SeatGrid';
@@ -23,6 +24,7 @@ interface SeatingViewProps {
 }
 
 export function SeatingView({ store, status, run }: SeatingViewProps) {
+  const { t, m, lang } = useI18n();
   const { data } = store;
   const room = useMemo(() => buildRoom(data.room), [data.room]);
   const labels = useMemo(
@@ -120,50 +122,49 @@ export function SeatingView({ store, status, run }: SeatingViewProps) {
             onClick={() => run()}
             disabled={running || !canRun}
           >
-            {running ? 'Berechne …' : variants.length > 0 ? 'Neu berechnen' : 'Sitzplan berechnen'}
+            {running ? t('plan.running') : variants.length > 0 ? t('plan.recalculate') : t('plan.calculate')}
           </button>
 
           {pinnedCount > 0 && (
             <>
               <button type="button" className="button" onClick={() => run()} disabled={running}>
-                Rest neu optimieren ({pinnedCount} festgehalten)
+                {t('plan.optimizeRest', { count: pinnedCount })}
               </button>
               <button type="button" className="button" onClick={store.clearPins}>
-                Alle Pins lösen
+                {t('plan.clearPins')}
               </button>
             </>
           )}
 
-          {!canRun && <span className="hint">Erfassen Sie zuerst die Namen der Klasse.</span>}
+          {!canRun && <span className="hint">{t('plan.needNames')}</span>}
         </div>
 
         {running && (
-          <div className="progress" aria-label="Fortschritt">
+          <div className="progress" aria-label={t('plan.progress')}>
             <div style={{ width: `${Math.round(status.fraction * 100)}%` }} />
           </div>
         )}
 
         {status.kind === 'error' && (
-          <p className="notice error">Fehler bei der Berechnung: {status.message}</p>
+          <p className="notice error">{t('plan.error', { message: status.message })}</p>
         )}
 
         {(status.kind === 'blocked' || status.kind === 'done') &&
           status.issues.map((issue, index) => (
             <p key={index} className={`notice ${issue.severity === 'error' ? 'error' : 'warning'}`}>
-              {issue.message}
+              {m(issue.message)}
             </p>
           ))}
 
-        {status.kind === 'blocked' && (
-          <p className="hint">
-            Solange sich die harten Vorgaben widersprechen, gibt es keinen zulässigen Sitzplan.
-            Passen Sie eine der genannten Vorgaben an.
-          </p>
-        )}
+        {status.kind === 'blocked' && <p className="hint">{t('plan.blocked')}</p>}
 
         {status.kind === 'done' && (
           <p className="hint">
-            {status.succeeded} von {status.attempted} Läufen erfolgreich, {status.elapsedMs} ms.
+            {t('plan.stats', {
+              succeeded: status.succeeded,
+              attempted: status.attempted,
+              ms: status.elapsedMs,
+            })}
           </p>
         )}
       </div>
@@ -179,43 +180,38 @@ export function SeatingView({ store, status, run }: SeatingViewProps) {
                     type="button"
                     aria-current={index === variantIndex}
                     onClick={() => selectVariant(index)}
-                    title={`Bewertung ${variant.score.toFixed(1)}`}
+                    title={t('plan.score', { score: variant.score.toFixed(1) })}
                   >
-                    Variante {String.fromCharCode(65 + index)}
+                    {t('plan.variant', { letter: String.fromCharCode(65 + index) })}
                   </button>
                 ))}
                 <button
                   type="button"
                   aria-current={mirrored}
                   onClick={() => setMirrored((current) => !current)}
-                  title="Zeigt den Plan so, wie Sie ihn von vorne sehen — links und rechts vertauscht"
+                  title={t('plan.mirrorTitle')}
                 >
-                  {mirrored ? 'Schülerperspektive' : 'Lehrerperspektive'}
+                  {mirrored ? t('plan.studentView') : t('plan.teacherView')}
                 </button>
                 <button type="button" onClick={() => window.print()}>
-                  Drucken / als PDF speichern
+                  {t('plan.print')}
                 </button>
               </div>
 
-              {edited && (
-                <p className="notice info">
-                  Von Hand geändert. Halten Sie Plätze mit dem Nadel-Symbol fest und wählen Sie
-                  „Rest neu optimieren“, damit der Algorithmus den Rest darum herum neu ordnet.
-                </p>
-              )}
+              {edited && <p className="notice info">{t('plan.edited')}</p>}
 
               {report.hardViolations.map((violation, index) => (
                 <p key={index} className="notice error">
-                  {violation}
+                  {m(violation)}
                 </p>
               ))}
             </div>
 
             <div className="print-header print-only">
-              <h2>Sitzplan {data.name}</h2>
+              <h2>{t('plan.printTitle', { name: data.name })}</h2>
               <span className="meta">
-                {mirrored ? 'Ansicht von vorne' : 'Blick zur Tafel'} ·{' '}
-                {new Date().toLocaleDateString('de-DE')}
+                {mirrored ? t('grid.viewFromFront') : t('plan.facingBoard')} ·{' '}
+                {new Date().toLocaleDateString(lang)}
               </span>
             </div>
 
@@ -228,10 +224,10 @@ export function SeatingView({ store, status, run }: SeatingViewProps) {
             />
 
             <div className="legend no-print">
-              <span className="l-first">Erstwunsch erfüllt</span>
-              <span className="l-second">Zweitwunsch erfüllt</span>
-              <span className="l-none">kein Wunsch erfüllt</span>
-              <span>Zum Umsetzen einen Platz auf einen anderen ziehen.</span>
+              <span className="l-first">{t('plan.legendFirst')}</span>
+              <span className="l-second">{t('plan.legendSecond')}</span>
+              <span className="l-none">{t('plan.legendNone')}</span>
+              <span>{t('plan.legendDrag')}</span>
             </div>
           </div>
 

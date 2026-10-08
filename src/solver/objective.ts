@@ -7,11 +7,14 @@
  *   Beiträge absteigend sortiert, mit abnehmendem Grenznutzen gewichtet:
  *       satScore(i) = c(1)*d0 + c(2)*d1 + c(3)*d2
  *   fairness(i)  = -noWishPenalty, falls kein Wunsch die Nähe-Schwelle erreicht
- *   special(i)   = Bonus der weichen Sonderwünsche für den belegten Platz
+ *   special(i)   = Bonus der weichen Platzregeln für den belegten Platz
+ *   pair(i)      = Bonus bzw. Malus der Beziehungsregeln, die i trägt („neben X“ /
+ *                  „nicht neben X“), plus die hohe Strafe für ein verletztes
+ *                  hartes „muss neben X“
  *
  *   Gesamt = Summe über alle Personen.
  *
- * Harte Regeln (Pins, harte Sonderwünsche, Trennungen) erscheinen *nicht* in der
+ * Harte Regeln (Pins, harte Platzregeln, Trennungen) erscheinen *nicht* in der
  * Bewertung. Sie werden als Zulässigkeit geprüft: unzulässige Züge entstehen erst
  * gar nicht. Damit kann die Suche sie strukturell nicht „erkaufen“.
  *
@@ -20,9 +23,18 @@
  * (`affected`). Das sind typisch ~4 statt 30 Personen.
  */
 
+import { PAIR_MUST_NEAR, PAIR_WANT_APART, PAIR_WANT_NEAR } from './problem';
 import type { SolverProblem } from './problem';
 
 export const EMPTY = -1;
+
+/**
+ * Strafe für eine verletzte „muss neben / am selben Tisch sitzen“-Regel. Sie ist so
+ * hoch, dass die Suche sie nie gegen Wünsche eintauscht — und wird dennoch nur als
+ * Strafe geführt, weil sich ein Paar nicht durch das Verbieten einzelner Züge
+ * zusammenhalten lässt (jeder Einzelzug trennt es zunächst).
+ */
+export const MUST_NEAR_PENALTY = 10_000;
 
 export class Evaluator {
   readonly problem: SolverProblem;
@@ -132,6 +144,25 @@ export class Evaluator {
     // Fairness: Wer Wünsche abgegeben hat, von denen keiner aufgeht, wird bestraft.
     if (to > from && bestProximity < p.weights.fulfilledProximity) {
       score -= p.weights.noWishPenalty;
+    }
+
+    // Beziehungsregeln, die diese Person trägt.
+    for (let k = p.pairStart[i]!, end = p.pairStart[i + 1]!; k < end; k++) {
+      const partnerSeat = this.seatOf[p.pairPartner[k]!]!;
+      if (partnerSeat === EMPTY) continue;
+      const w = p.prox.values[row + partnerSeat]!;
+      const threshold = p.pairThreshold[k]!;
+      switch (p.pairMode[k]) {
+        case PAIR_WANT_NEAR:
+          score += p.pairWeight[k]! * Math.min(1, w / threshold);
+          break;
+        case PAIR_WANT_APART:
+          if (w >= threshold) score -= p.pairWeight[k]!;
+          break;
+        case PAIR_MUST_NEAR:
+          score -= MUST_NEAR_PENALTY * (1 - Math.min(1, w / threshold));
+          break;
+      }
     }
 
     return score;

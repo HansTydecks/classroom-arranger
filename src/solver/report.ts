@@ -6,6 +6,10 @@
  * und liefert die Kennzahlen, an denen sich ein Plan beurteilen lässt.
  */
 
+import { isApartRule, isPairRule, pairRadius } from '../domain/rules';
+import { SEPARATION_THRESHOLD } from '../domain/proximity';
+import { msg } from '../i18n/message';
+import type { Msg } from '../i18n/message';
 import { Evaluator } from './objective';
 import { displayName, specialAllows, specialBonus } from './problem';
 import type { SolverProblem } from './problem';
@@ -27,6 +31,8 @@ export interface SpecialOutcome {
   kind: SpecialKind;
   hard: boolean;
   satisfied: boolean;
+  /** Nur bei Beziehungsregeln: das andere Kind. */
+  targetName?: string;
 }
 
 export interface StudentReport {
@@ -69,11 +75,11 @@ export interface SolutionReport {
   /** Personen mit Wünschen, von denen keiner aufgegangen ist. */
   unfulfilled: StudentReport[];
   /**
-   * Verletzte harte Regeln im Klartext. Der Solver erzeugt nie welche — nach einem
-   * manuellen Umsetzen per Ziehen &amp; Ablegen kann die Lehrkraft aber bewusst eine
-   * Vorgabe brechen, und das muss sichtbar sein.
+   * Verletzte harte Regeln. Der Solver erzeugt nie welche — nach einem manuellen
+   * Umsetzen per Ziehen & Ablegen kann die Lehrkraft aber bewusst eine Vorgabe
+   * brechen, und das muss sichtbar sein.
    */
-  hardViolations: string[];
+  hardViolations: Msg[];
 }
 
 export function buildReport(problem: SolverProblem, assignment: Int32Array): SolutionReport {
@@ -132,19 +138,37 @@ export function buildReport(problem: SolverProblem, assignment: Int32Array): Sol
       if (fulfilledCount > 0) withAtLeastOneFulfilled++;
     }
 
-    const specials: SpecialOutcome[] = student.specials.map((special) => {
-      const satisfied = !seat
-        ? false
-        : special.hard
-          ? specialAllows(special, seat, room)
-          : softSatisfied(special, seat, room, weights.specialBonus);
+    const specials: SpecialOutcome[] = [];
+    for (const special of student.specials) {
+      let satisfied: boolean;
+      let targetName: string | undefined;
+
+      if (isPairRule(special.kind)) {
+        const target = special.target ? problem.studentIndex.get(special.target) : undefined;
+        // Regeln ohne gültiges Ziel hat der Solver ignoriert — sie erscheinen nicht.
+        if (target === undefined || target === i) continue;
+        targetName = displayName(students[target]!);
+        satisfied = pairSatisfied(problem, special, assignment[i]!, assignment[target]!);
+      } else {
+        satisfied = !seat
+          ? false
+          : special.hard
+            ? specialAllows(special, seat, room)
+            : softSatisfied(special, seat, room, weights.specialBonus);
+      }
+
       if (special.hard) hardSpecialsTotal++;
       else {
         softSpecialsTotal++;
         if (satisfied) softSpecialsSatisfied++;
       }
-      return { kind: special.kind, hard: special.hard, satisfied };
-    });
+      specials.push({
+        kind: special.kind,
+        hard: special.hard,
+        satisfied,
+        ...(targetName ? { targetName } : {}),
+      });
+    }
 
     perStudent.push({
       studentId: student.id,
@@ -241,13 +265,26 @@ function countSeparations(
   return { total, respected };
 }
 
-/** Sammelt alle verletzten harten Regeln im Klartext. */
+/** Ist eine Beziehungsregel bei den gegebenen Plätzen erfüllt? */
+function pairSatisfied(
+  problem: SolverProblem,
+  rule: SpecialRequest,
+  seatA: number,
+  seatB: number,
+): boolean {
+  if (seatA < 0 || seatB < 0) return false;
+  const w = problem.prox.values[seatA * problem.m + seatB]!;
+  const threshold = SEPARATION_THRESHOLD[pairRadius(rule.kind)];
+  return isApartRule(rule.kind) ? w < threshold : w >= threshold;
+}
+
+/** Sammelt alle verletzten harten Regeln. */
 function findHardViolations(
   problem: SolverProblem,
   assignment: Int32Array,
   perStudent: StudentReport[],
-): string[] {
-  const violations: string[] = [];
+): Msg[] {
+  const violations: Msg[] = [];
   const { m, room, students } = problem;
 
   for (let i = 0; i < problem.n; i++) {
@@ -257,12 +294,14 @@ function findHardViolations(
     if (seat >= 0 && problem.allowed[i * m + seat] !== 1) {
       const pinned = students[i]!.pinnedSeat;
       const unmet = perStudent[i]!.specials
-        .filter((special) => special.hard && !special.satisfied)
+        .filter((special) => special.hard && !special.satisfied && !isPairRule(special.kind))
         .map((special) => special.kind);
       violations.push(
         pinned && room.seats[seat]!.id !== pinned
-          ? `${name} sitzt nicht auf dem festgehaltenen Platz.`
-          : `${name}: harte Vorgabe nicht eingehalten (${unmet.join(', ') || 'Platzvorgabe'}).`,
+          ? msg('violation.pinned', { name })
+          : unmet.length > 0
+            ? msg('violation.hardRule', { name, rules: { rules: unmet } })
+            : msg('violation.seatRule', { name }),
       );
     }
 
@@ -273,9 +312,23 @@ function findHardViolations(
       if (seat < 0 || partnerSeat < 0) continue;
       if (problem.prox.values[seat * m + partnerSeat]! >= problem.sepThreshold[k]!) {
         violations.push(
-          `${name} und ${displayName(students[j]!)} sitzen zu nah beieinander — die Trennung ist verletzt.`,
+          msg('violation.separation', { a: name, b: displayName(students[j]!) }),
         );
       }
+    }
+  }
+
+  for (const { a, b, threshold } of problem.togetherRules) {
+    const seatA = assignment[a]!;
+    const seatB = assignment[b]!;
+    if (seatA < 0 || seatB < 0) continue;
+    if (problem.prox.values[seatA * m + seatB]! < threshold) {
+      violations.push(
+        msg('violation.together', {
+          a: displayName(students[a]!),
+          b: displayName(students[b]!),
+        }),
+      );
     }
   }
 

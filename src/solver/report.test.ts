@@ -81,6 +81,6 @@ describe('Bericht: Sonderwünsche', () => {
   it('meldet eine verletzte harte Vorgabe im Klartext', () => {
     const report = reportFor([{ kind: 'front', hard: true }], 4, 0);
     expect(report.hardViolations).toHaveLength(1);
-    expect(report.hardViolations[0]).toContain('Anna');
+    expect(report.hardViolations[0]?.params?.name).toBe('Anna');
   });
 });

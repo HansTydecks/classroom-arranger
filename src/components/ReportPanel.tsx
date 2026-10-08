@@ -3,17 +3,9 @@
  * Wunscherfüllung Person für Person.
  */
 
+import { useI18n } from '../i18n/I18nContext';
 import type { SolutionReport } from '../solver/report';
-import type { SpecialKind, Student } from '../types/model';
-
-const SPECIAL_LABELS: Record<SpecialKind, string> = {
-  front: 'vorne',
-  notBack: 'nicht hinten',
-  window: 'Fenster',
-  aisle: 'Gang',
-  notDoor: 'nicht an der Tür',
-  maxRow: 'Reihenbegrenzung',
-};
+import type { Student } from '../types/model';
 
 interface ReportPanelProps {
   report: SolutionReport;
@@ -22,55 +14,55 @@ interface ReportPanelProps {
 }
 
 export function ReportPanel({ report, labels, students }: ReportPanelProps) {
+  const { t } = useI18n();
   const { stats } = report;
   const label = (id: string) => labels.get(id) ?? id;
   void students;
 
   return (
     <div className="panel report-panel">
-      <h2>Auswertung</h2>
+      <h2>{t('report.title')}</h2>
 
       <div className="stats">
         <Stat
           value={`${stats.withAtLeastOneFulfilled} / ${stats.withWishes}`}
-          label={`mit erfülltem Wunsch (${stats.fulfilledShare.toFixed(0)} %)`}
+          label={t('report.withWish', { share: stats.fulfilledShare.toFixed(0) })}
         />
-        <Stat value={String(stats.firstChoiceFulfilled)} label="erfüllte Erstwünsche" />
-        <Stat value={String(stats.secondChoiceFulfilled)} label="erfüllte Zweitwünsche" />
+        <Stat value={String(stats.firstChoiceFulfilled)} label={t('report.firstFulfilled')} />
+        <Stat value={String(stats.secondChoiceFulfilled)} label={t('report.secondFulfilled')} />
         <Stat
           value={`${stats.mutualPairsRealized} / ${stats.mutualPairsTotal}`}
-          label="gegenseitige Paare zusammen"
+          label={t('report.mutualPairs')}
         />
         <Stat
           value={`${stats.softSpecialsSatisfied} / ${stats.softSpecialsTotal}`}
-          label="Sonderwünsche erfüllt"
+          label={t('report.rulesSatisfied')}
         />
         <Stat
           value={`${stats.separationsRespected} / ${stats.separationsTotal}`}
-          label="Trennungen eingehalten"
+          label={t('report.separations')}
         />
       </div>
 
       {report.unfulfilled.length > 0 ? (
         <p className="notice warning">
-          <strong>Ohne erfüllten Wunsch:</strong>{' '}
-          {report.unfulfilled.map((entry) => label(entry.studentId)).join(', ')}. Hier lohnt ein
-          prüfender Blick — oft hilft schon ein einzelnes Umsetzen von Hand.
+          <strong>{t('report.unfulfilled')}</strong>{' '}
+          {t('report.unfulfilledHint', {
+            names: report.unfulfilled.map((entry) => label(entry.studentId)),
+          })}
         </p>
       ) : (
-        <p className="notice info">
-          Alle Personen mit Wünschen sitzen neben mindestens einer gewünschten Person.
-        </p>
+        <p className="notice info">{t('report.allFulfilled')}</p>
       )}
 
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Reihe</th>
-              <th>Wünsche</th>
-              <th>Sonderwünsche</th>
+              <th>{t('common.name')}</th>
+              <th>{t('report.row')}</th>
+              <th>{t('report.wishes')}</th>
+              <th>{t('report.rules')}</th>
             </tr>
           </thead>
           <tbody>
@@ -80,7 +72,7 @@ export function ReportPanel({ report, labels, students }: ReportPanelProps) {
                 <td className="hint">{entry.tableRow !== null ? entry.tableRow + 1 : '—'}</td>
                 <td>
                   {entry.wishes.length === 0 ? (
-                    <span className="hint">keine abgegeben</span>
+                    <span className="hint">{t('report.noWishes')}</span>
                   ) : (
                     entry.wishes.map((wish, index) => (
                       <span key={index} style={{ marginRight: 10, whiteSpace: 'nowrap' }}>
@@ -89,7 +81,7 @@ export function ReportPanel({ report, labels, students }: ReportPanelProps) {
                         </span>{' '}
                         {label(wish.targetId)}
                         {wish.mutual && (
-                          <span className="hint" title="Der Wunsch ist gegenseitig">
+                          <span className="hint" title={t('report.mutualTitle')}>
                             {' '}
                             ↔
                           </span>
@@ -107,9 +99,10 @@ export function ReportPanel({ report, labels, students }: ReportPanelProps) {
                         key={index}
                         className={`badge ${special.satisfied ? 'good' : special.hard ? 'bad' : 'mid'}`}
                         style={{ marginRight: 5 }}
-                        title={special.hard ? 'harte Vorgabe' : 'weicher Wunsch'}
+                        title={special.hard ? t('report.hardTitle') : t('report.softTitle')}
                       >
-                        {SPECIAL_LABELS[special.kind]}
+                        {t(`rule.${special.kind}.short`)}
+                        {special.targetName ? ` ${special.targetName}` : ''}
                         {special.hard ? ' !' : ''} {special.satisfied ? '✓' : '✕'}
                       </span>
                     ))

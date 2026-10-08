@@ -6,7 +6,8 @@
 import { useState } from 'react';
 import type { DragEvent } from 'react';
 
-import type { RoomLayout, Seat, SeatTag } from '../types/model';
+import { useI18n } from '../i18n/I18nContext';
+import type { RoomLayout, Seat } from '../types/model';
 
 export interface SeatOccupant {
   studentId: string;
@@ -18,14 +19,6 @@ export interface SeatOccupant {
   bestRank: number | null | undefined;
   pinned: boolean;
 }
-
-const TAG_LABELS: Record<SeatTag, string> = {
-  window: 'Fenster',
-  door: 'Tür',
-  aisle: 'Gang',
-  front: 'vorne',
-  back: 'hinten',
-};
 
 interface SeatGridProps {
   room: RoomLayout;
@@ -54,6 +47,8 @@ export function SeatGrid({
   onSwapSeats,
   onTogglePin,
 }: SeatGridProps) {
+  const { t } = useI18n();
+  const tagLabel = (seat: Seat) => seat.tags.map((tag) => t(`seat.tag.${tag}`));
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -79,9 +74,9 @@ export function SeatGrid({
       className="room"
       style={{ gridTemplateColumns: `repeat(${room.gridCols}, auto)` }}
       role="group"
-      aria-label="Sitzplan"
+      aria-label={t('grid.label')}
     >
-      <div className="board">Tafel{mirrored ? ' — Ansicht von vorne' : ''}</div>
+      <div className="board">{t('grid.board')}{mirrored ? ` — ${t('grid.viewFromFront')}` : ''}</div>
 
       {Array.from({ length: room.gridRows }, (_, row) =>
         columnOrder.map((col) => {
@@ -123,7 +118,7 @@ export function SeatGrid({
               }}
               onDragLeave={() => setDragOver((current) => (current === seat.id ? null : current))}
               onDrop={(event) => handleDrop(event, seat.id)}
-              title={seat.tags.map((tag) => TAG_LABELS[tag]).join(', ')}
+              title={tagLabel(seat).join(', ')}
             >
               {occupant ? (
                 <>
@@ -135,22 +130,22 @@ export function SeatGrid({
                       onClick={() => onTogglePin(occupant.studentId)}
                       title={
                         occupant.pinned
-                          ? 'Platz freigeben — wird beim Neuberechnen wieder verschoben'
-                          : 'Platz festhalten — bleibt beim Neuberechnen erhalten'
+                          ? t('grid.unpinTitle')
+                          : t('grid.pinTitle')
                       }
-                      aria-label={occupant.pinned ? 'Platz freigeben' : 'Platz festhalten'}
+                      aria-label={occupant.pinned ? t('grid.unpin') : t('grid.pin')}
                     >
                       {occupant.pinned ? '📌' : '○'}
                     </button>
                   )}
                 </>
               ) : (
-                <span className="name">frei</span>
+                <span className="name">{t('grid.free')}</span>
               )}
 
               {showTags && seat.tags.length > 0 && (
                 <span className="seat-tags">
-                  {seat.tags.map((tag) => TAG_LABELS[tag]).join(' · ')}
+                  {tagLabel(seat).join(' · ')}
                 </span>
               )}
             </div>
