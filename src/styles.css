@@ -4,9 +4,8 @@
  * Palette: #e8c547 (Senf) · #30323d (Tinte) · #4d5061 (Schiefer) · #5c80bc (Blau) ·
  * #cdd1c4 (Salbei-Grau). Alle weiteren Töne sind Abstufungen dieser fünf Farben.
  *
- * Schriften: Fraunces (Überschriften) und Atkinson Hyperlegible (Fließtext). Beide
- * werden mit der Anwendung ausgeliefert (@fontsource, siehe main.tsx) — es wird nichts
- * von Dritten nachgeladen, damit beim Aufruf keine Daten an Dritte fließen.
+ * Schrift: Atkinson Hyperlegible. Sie wird mit der Anwendung ausgeliefert
+ * (@fontsource, siehe main.tsx) — es wird nichts von Dritten nachgeladen.
  */
 
 :root {
@@ -41,7 +40,7 @@
   --radius: 3px;
 
   --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
-  --font-heading: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  --font-heading: var(--font-body);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -321,8 +320,10 @@ address {
   flex-wrap: wrap;
   gap: 8px 20px;
   align-items: center;
+  justify-content: center;
   color: var(--text-muted);
   font-size: 0.88rem;
+  text-align: center;
 }
 
 .site-footer button {

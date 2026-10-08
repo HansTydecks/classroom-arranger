@@ -119,8 +119,8 @@ typisch 4 statt 30 Personen. Ein Zug kostet dadurch ~30 Operationen statt ~500.
 - **Kein Backend.** Nach dem Laden stellt die Seite keine Netzwerkverbindung mehr her —
   im Browsertest nachgewiesen: null Anfragen an fremde Hosts.
 - Daten liegen ausschließlich in der **IndexedDB** dieses Browsers; JSON-Export als Sicherung.
-- Keine Cookies, kein Tracking, keine externen Schriften oder CDNs (Fraunces und
-  Atkinson Hyperlegible werden mit der Anwendung ausgeliefert).
+- Keine Cookies, kein Tracking, keine externen Schriften oder CDNs (Atkinson
+  Hyperlegible wird mit der Anwendung ausgeliefert).
 - Namensanzeige umschaltbar auf Vorname bzw. Vorname + Anfangsbuchstabe (Datenminimierung).
 - Impressum und Datenschutzerklärung ([`src/pages/Legal.tsx`](src/pages/Legal.tsx))
   entsprechen dem Impressum auf <https://tinfo.space/about/impressum.html>; die
