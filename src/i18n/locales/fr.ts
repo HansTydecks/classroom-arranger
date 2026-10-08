@@ -111,7 +111,7 @@ export const fr: Messages = {
   'wishes.second': '2e souhait',
   'wishes.third': '3e souhait',
   'wishes.wishOf': '{rank} de {name}',
-  'wishes.addRule': '＋ Ajouter une règle …',
+  'wishes.addRule': '+ Ajouter une règle …',
   'wishes.addRuleFor': 'Ajouter une règle pour {name}',
   'wishes.removeRule': 'Supprimer la règle « {rule} »',
   'wishes.rowLimit': 'Rangée limite',

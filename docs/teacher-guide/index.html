@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Sitzplan-Generator – Kurzanleitung für Lehrkräfte</title>
+<style>
+  @font-face { font-family: 'Fraunces'; font-weight: 100 900; src: url('../../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2') format('woff2'); }
+  @font-face { font-family: 'Atkinson'; font-weight: 400; src: url('../../node_modules/@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-400-normal.woff2') format('woff2'); }
+  @font-face { font-family: 'Atkinson'; font-weight: 700; src: url('../../node_modules/@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-700-normal.woff2') format('woff2'); }
+  @page { size: A4; margin: 0; }
+  :root { --ink:#30323d; --slate:#4d5061; --blue:#5c80bc; --mustard:#e8c547; --sage:#cdd1c4; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font: 9.5pt/1.4 'Atkinson', sans-serif; color: var(--ink); }
+  h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .page { width: 210mm; height: 297mm; padding: 0 16mm 14mm; position: relative; overflow: hidden; page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .band { background: var(--ink); color: #f0f1ea; margin: 0 -16mm 5mm; padding: 9mm 16mm 6mm; border-bottom: 2.5mm solid var(--mustard); display: flex; align-items: center; gap: 5mm; }
+  .band.small { padding: 6mm 16mm 4mm; margin-bottom: 6mm; }
+  .band svg { width: 14mm; height: 14mm; flex: none; }
+  .band h1 { font-size: 21pt; line-height: 1.1; }
+  .band p { margin: 1mm 0 0; color: var(--sage); font-size: 9.5pt; }
+  .band.small h2 { font-size: 13pt; }
+  h2 { font-size: 13pt; margin: 5mm 0 2mm; }
+  h3 { font-size: 10.5pt; margin: 0 0 1mm; }
+  p { margin: 0 0 2.2mm; }
+  .lead { font-size: 11pt; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+  .steps li { counter-increment: s; padding-left: 9mm; position: relative; margin-bottom: 3mm; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 6.2mm; height: 6.2mm; border-radius: 50%; background: var(--ink); color: var(--mustard); font-weight: 700; text-align: center; line-height: 6.2mm; font-size: 9pt; }
+  .steps b { display: block; }
+  figure { margin: 0 0 3mm; }
+  figure img { width: 100%; display: block; border: 0.35mm solid var(--ink); }
+  figcaption { font-size: 8pt; color: var(--slate); margin-top: 1mm; }
+  .box { background: var(--sage); border-left: 1.8mm solid var(--blue); padding: 3mm 4mm; margin: 3mm 0; }
+  .box.mustard { background: #f6ecc0; border-left-color: var(--mustard); }
+  .box h3 { margin-bottom: 0.8mm; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 1mm 0 3mm; }
+  th { text-align: left; background: var(--ink); color: #f0f1ea; padding: 1.2mm 2mm; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 1.2mm 2mm; border-bottom: 0.25mm solid var(--sage); vertical-align: top; }
+  td:first-child { font-weight: 700; white-space: nowrap; width: 33%; }
+  ul { margin: 0 0 2mm; padding-left: 4.5mm; }
+  li { margin-bottom: 0.8mm; }
+  .foot { position: absolute; left: 16mm; right: 16mm; bottom: 8mm; border-top: 0.4mm solid var(--ink); padding-top: 2mm; font-size: 8pt; color: var(--slate); display: flex; justify-content: space-between; }
+  .tags span { display: inline-block; background: var(--mustard); padding: 0.3mm 2mm; margin: 0 1mm 1mm 0; font-size: 8.5pt; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <header class="band">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#e8c547"/><rect x="6" y="7" width="20" height="2.4" rx="1.2" fill="#30323d"/><g fill="#30323d"><rect x="6" y="13" width="8" height="5" rx="1.2"/><rect x="18" y="13" width="8" height="5" rx="1.2"/><rect x="6" y="21" width="8" height="5" rx="1.2"/><rect x="18" y="21" width="8" height="5" rx="1.2"/></g></svg>
+    <div>
+      <h1>Sitzplan-Generator</h1>
+      <p>Kurzanleitung für Lehrkräfte · Sitzpläne aus Wünschen und Regeln – in Minuten, ohne Anmeldung</p>
+    </div>
+  </header>
+
+  <p class="lead">Der Sitzplan-Generator erstellt aus den Sitznachbar-Wünschen Ihrer Klasse einen fairen Sitzplan. Er berücksichtigt Wünsche <b>und</b> pädagogische Vorgaben (z.&nbsp;B. „vorne“, „nicht am Fenster“, „nicht neben …“) und zeigt Ihnen drei Varianten zur Auswahl.</p>
+
+  <div class="tags">
+    <span>läuft im Browser</span><span>keine Anmeldung</span><span>keine Datenübertragung</span><span>Deutsch · English · Français · Español</span><span>kostenlos &amp; werbefrei</span>
+  </div>
+
+  <h2>In vier Schritten zum Sitzplan</h2>
+  <div class="cols">
+    <ol class="steps">
+      <li><b>Klassenzimmer</b>Vorlage wählen (Reihen, Doppelreihen, Gruppentische, U-Form), Anzahl der Reihen und Tische einstellen, Fensterseite und Tür angeben.</li>
+      <li><b>Klasse</b>Namen einfügen – eine Liste aus Excel oder Word genügt. Wählen Sie, ob Vor- und Nachname, nur der Vorname oder Vorname + Initial angezeigt wird.</li>
+      <li><b>Wünsche &amp; Regeln</b>Je Kind bis zu drei Sitznachbar-Wünsche eintragen und Regeln über das Auswahlmenü hinzufügen (siehe Seite 2).</li>
+      <li><b>Sitzplan</b>Mit einem Klick „Sitzplan erstellen“. Drei Varianten vergleichen, Plätze per Ziehen &amp; Ablegen tauschen, wichtige Plätze festpinnen und den Rest neu optimieren lassen.</li>
+    </ol>
+    <figure>
+      <img src="img/raum.png" alt="Schritt Klassenzimmer" />
+      <figcaption>Schritt 1: Raum einrichten – die Vorschau zeigt Fenster-, Gang- und Türplätze.</figcaption>
+    </figure>
+  </div>
+
+  <figure style="width:78%;margin-inline:auto">
+    <img src="img/plan.png" alt="Fertiger Sitzplan" />
+    <figcaption>Ergebnis: blau = Erstwunsch erfüllt, gelb = Zweitwunsch erfüllt, rot = kein Wunsch erfüllt. Drei Varianten, Lehrerperspektive und Druck/PDF-Export inklusive.</figcaption>
+  </figure>
+
+  <div class="box">
+    <h3>Fair statt nur „optimal“</h3>
+    <p style="margin:0">Das Verfahren belohnt gegenseitige Wünsche, wertet den zweiten Wunsch desselben Kindes geringer und bestraft Pläne, in denen ein Kind leer ausgeht. So sitzen echte Freundespaare zusammen – ohne dass beliebte Kinder alles bekommen. Die Gewichtung lässt sich im Schritt „Sitzplan“ anpassen.</p>
+  </div>
+
+  <div class="foot"><span>Sitzplan-Generator · Kurzanleitung für Lehrkräfte</span><span>Seite 1 von 2</span></div>
+</section>
+
+<section class="page">
+  <header class="band small"><h2>Regeln für einzelne Kinder</h2></header>
+
+  <p>Regeln werden je Kind über das Menü <b>„+ Regel hinzufügen …“</b> ausgewählt. Das Menü ist nach Themen gegliedert. Jede Regel ist entweder <b>weich</b> (ein Wunsch, den der Algorithmus nach Möglichkeit erfüllt) oder <b>hart</b> (wird nie verletzt – gedacht für Attest, Sehschwäche oder Nachteilsausgleich). Ein Klick auf „weich“ bzw. „hart“ schaltet um.</p>
+
+  <div class="cols">
+    <table>
+      <thead><tr><th>Regel</th><th>Wirkung</th></tr></thead>
+      <tbody>
+        <tr><td colspan="2" style="background:var(--sage);font-weight:700">Lage im Raum</td></tr>
+        <tr><td>vorne</td><td>erste Tischreihe</td></tr>
+        <tr><td>nicht hinten</td><td>nicht in der letzten Reihe</td></tr>
+        <tr><td>hinten</td><td>letzte Tischreihe</td></tr>
+        <tr><td>höchstens bis Reihe …</td><td>nicht weiter hinten</td></tr>
+        <tr><td>ab Reihe …</td><td>nicht weiter vorne</td></tr>
+        <tr><td>linke / rechte Hälfte</td><td>aus Sicht der Schüler</td></tr>
+        <tr><td>Raummitte</td><td>mittlere Plätze</td></tr>
+        <tr><td colspan="2" style="background:var(--sage);font-weight:700">Platzeigenschaften</td></tr>
+        <tr><td>Fenster / nicht Fenster</td><td>Licht, Blendung, Zugluft</td></tr>
+        <tr><td>Gang / nicht Gang</td><td>Hilfsmittel, Ruhe</td></tr>
+        <tr><td>nahe Tür / nicht Tür</td><td>Unruhe, Fluchtweg</td></tr>
+      </tbody>
+    </table>
+    <div>
+      <table>
+        <thead><tr><th>Beziehung zu Kind …</th><th>Wirkung</th></tr></thead>
+        <tbody>
+          <tr><td>nicht neben</td><td>kein direkter Nachbar</td></tr>
+          <tr><td>nicht selber Tisch</td><td>anderer Tisch / andere Gruppe</td></tr>
+          <tr><td>direkt neben</td><td>Lernpartner, Buddy</td></tr>
+          <tr><td>selber Tisch</td><td>gleiche Gruppe</td></tr>
+        </tbody>
+      </table>
+      <div class="box mustard">
+        <h3>Wenn es nicht aufgeht</h3>
+        <p style="margin:0">Widersprechen sich harte Regeln oder fehlen Plätze, meldet die Vorabprüfung <b>im Klartext mit Namen</b>, woran es liegt. Weiche Regeln und Wünsche werden gegeneinander abgewogen.</p>
+      </div>
+      <div class="box">
+        <h3>Tipps aus der Praxis</h3>
+        <ul style="margin:0">
+          <li>Ein bis zwei freie Plätze geben mehr Spielraum.</li>
+          <li>Harte Regeln sparsam einsetzen.</li>
+          <li>„Lehrerperspektive“ spiegelt den Plan wie von vorne gesehen.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <figure>
+    <img src="img/regeln.png" alt="Regeln je Kind" style="height:52mm;object-fit:cover;object-position:top" />
+    <figcaption>Schritt 3: Wünsche und Regeln je Kind. Dunkle Markierung = harte Regel, gelbe Markierung = weiche Regel.</figcaption>
+  </figure>
+
+  <h2 style="margin-top:3mm">Datenschutz &amp; Technik</h2>
+  <ul>
+    <li>Alle Namen, Wünsche und Pläne bleiben <b>ausschließlich im Browser</b> auf Ihrem Gerät. Es gibt keinen Server, kein Tracking und keine Cookies.</li>
+    <li>Über „Daten sichern“ speichern Sie die Klasse als Datei, über „Sicherung laden“ spielen Sie sie wieder ein. „Alle Daten löschen“ entfernt alles.</li>
+    <li>Der Druck ist als A4-Querformat vorbereitet („Drucken / als PDF speichern“). Für Aushänge genügen Vornamen.</li>
+    <li>Aufruf: <b>https://hanstydecks.github.io/classroom-arranger/</b> – aktueller Browser (Chrome, Edge, Firefox, Safari).</li>
+  </ul>
+
+  <div class="foot"><span>Hans Tydecks · Talamtstr. 9 · 06108 Halle (Saale) · hanstydecks.tea@gmail.com · Impressum in der Anwendung</span><span>Seite 2 von 2</span></div>
+</section>
+
+</body>
+</html>

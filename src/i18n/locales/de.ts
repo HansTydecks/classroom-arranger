@@ -116,7 +116,7 @@ export const de = {
   'wishes.second': 'Zweitwunsch',
   'wishes.third': 'Drittwunsch',
   'wishes.wishOf': '{rank} von {name}',
-  'wishes.addRule': '＋ Regel hinzufügen …',
+  'wishes.addRule': '+ Regel hinzufügen …',
   'wishes.addRuleFor': 'Regel für {name} hinzufügen',
   'wishes.removeRule': 'Regel „{rule}“ entfernen',
   'wishes.rowLimit': 'Grenzreihe',

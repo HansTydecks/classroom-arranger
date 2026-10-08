@@ -30,7 +30,7 @@ function newId(): string {
  * Ergänzt fehlende Felder aus älteren Ständen, damit ein gespeicherter Datensatz
  * nach einer Erweiterung des Modells nicht die Anwendung lahmlegt.
  */
-function migrate(stored: ClassData): ClassData {
+export function migrate(stored: ClassData): ClassData {
   const base = emptyClass();
   const students: Student[] = (stored.students ?? []).map((student) => ({
     ...student,
