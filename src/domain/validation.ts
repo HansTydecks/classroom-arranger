@@ -7,7 +7,10 @@
  * Namen.
  */
 
+import { msg } from '../i18n/message';
+import type { Msg } from '../i18n/message';
 import type { ClassData, RoomLayout } from '../types/model';
+import { SEPARATION_THRESHOLD } from './proximity';
 import { displayName } from '../solver/problem';
 import type { SolverProblem } from '../solver/problem';
 
@@ -15,7 +18,7 @@ export type IssueSeverity = 'error' | 'warning';
 
 export interface ValidationIssue {
   severity: IssueSeverity;
-  message: string;
+  message: Msg;
   /** Beteiligte Personen, damit die Oberfläche sie hervorheben kann. */
   studentIds?: string[];
 }
@@ -27,10 +30,10 @@ export interface ValidationResult {
 }
 
 export function validate(
-  data: ClassData,
+  _data: ClassData,
   room: RoomLayout,
   problem: SolverProblem,
-  compileWarnings: string[] = [],
+  compileWarnings: Msg[] = [],
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
   const { n, m, students } = problem;
@@ -42,15 +45,10 @@ export function validate(
   if (n > m) {
     issues.push({
       severity: 'error',
-      message: `Der Raum hat ${m} Plätze, die Klasse zählt aber ${n} Personen. Es fehlen ${n - m} Plätze.`,
+      message: msg('validation.seatsMissing', { seats: m, students: n, missing: n - m }),
     });
   } else if (n === m && n > 0) {
-    issues.push({
-      severity: 'warning',
-      message:
-        'Alle Plätze sind belegt. Ohne freien Platz hat der Algorithmus kaum Spielraum — ' +
-        'ein oder zwei zusätzliche Plätze verbessern das Ergebnis oft deutlich.',
-    });
+    issues.push({ severity: 'warning', message: msg('validation.allSeatsTaken') });
   }
 
   // --- 2. Personen ohne erlaubten Platz ------------------------------------
@@ -59,7 +57,7 @@ export function validate(
     if (problem.domainSize[i] === 0) {
       issues.push({
         severity: 'error',
-        message: `${displayName(students[i]!)}: Die harten Vorgaben schließen jeden Platz im Raum aus.`,
+        message: msg('validation.noSeatAllowed', { name: displayName(students[i]!) }),
         studentIds: [students[i]!.id],
       });
     }
@@ -69,29 +67,27 @@ export function validate(
 
   const blocking = findOversubscribedGroup(problem);
   if (blocking) {
-    const names = blocking.students.map((i) => displayName(students[i]!));
     issues.push({
       severity: 'error',
-      message:
-        `${names.length} Personen (${names.join(', ')}) benötigen wegen harter Vorgaben Plätze, ` +
-        `von denen es nur ${blocking.seatCount} gibt. Lockern Sie eine der Vorgaben oder ` +
-        'vergrößern Sie den passenden Bereich.',
+      message: msg('validation.oversubscribed', {
+        names: blocking.students.map((i) => displayName(students[i]!)),
+        count: blocking.students.length,
+        seats: blocking.seatCount,
+      }),
       studentIds: blocking.students.map((i) => students[i]!.id),
     });
   }
 
   // --- 4. Trennungen: paarweise erfüllbar? ---------------------------------
 
-  for (const separation of data.separations) {
-    const a = problem.studentIndex.get(separation.a);
-    const b = problem.studentIndex.get(separation.b);
-    if (a === undefined || b === undefined || a === b) continue;
+  for (const { a, b } of problem.separations) {
     if (!separablePair(problem, a, b)) {
       issues.push({
         severity: 'error',
-        message:
-          `${displayName(students[a]!)} und ${displayName(students[b]!)} lassen sich nicht trennen: ` +
-          'Ihre harten Platzvorgaben lassen nur Plätze zu, die zu nah beieinander liegen.',
+        message: msg('validation.cannotSeparate', {
+          a: displayName(students[a]!),
+          b: displayName(students[b]!),
+        }),
         studentIds: [students[a]!.id, students[b]!.id],
       });
     }
@@ -100,19 +96,45 @@ export function validate(
   // --- 5. Trennungs-Cliquen gegen die Zahl der Tische ----------------------
 
   const tableCount = new Set(room.seats.map((s) => s.tableId)).size;
-  const clique = largestTableSeparationClique(data, problem);
+  const clique = largestTableSeparationClique(problem);
   if (clique.length > tableCount) {
-    const names = clique.map((i) => displayName(students[i]!));
     issues.push({
       severity: 'error',
-      message:
-        `${names.join(', ')} müssen alle voneinander getrennt sitzen, es gibt aber nur ` +
-        `${tableCount} Tische. Mindestens zwei von ihnen müssten sich einen Tisch teilen.`,
+      message: msg('validation.tableClique', {
+        names: clique.map((i) => displayName(students[i]!)),
+        tables: tableCount,
+      }),
       studentIds: clique.map((i) => students[i]!.id),
     });
   }
 
-  // --- 6. Hinweise ----------------------------------------------------------
+  // --- 6. „Muss neben / am selben Tisch sitzen“ ----------------------------
+
+  for (const { a, b, threshold } of problem.togetherRules) {
+    const names = { a: displayName(students[a]!), b: displayName(students[b]!) };
+    const ids = [students[a]!.id, students[b]!.id];
+
+    const conflicting = problem.separations.some(
+      (sep) =>
+        ((sep.a === a && sep.b === b) || (sep.a === b && sep.b === a)) &&
+        threshold >= SEPARATION_THRESHOLD[sep.radius],
+    );
+    if (conflicting) {
+      issues.push({
+        severity: 'error',
+        message: msg('validation.togetherConflict', names),
+        studentIds: ids,
+      });
+    } else if (!nearPairPossible(problem, a, b, threshold)) {
+      issues.push({
+        severity: 'error',
+        message: msg('validation.togetherImpossible', names),
+        studentIds: ids,
+      });
+    }
+  }
+
+  // --- 7. Hinweise ----------------------------------------------------------
 
   const nobodyWants = students.filter(
     (_, i) => problem.affectedStart[i + 1]! - problem.affectedStart[i]! === 1,
@@ -120,20 +142,12 @@ export function validate(
   if (nobodyWants.length > 0) {
     issues.push({
       severity: 'warning',
-      message:
-        `Niemand hat sich ${listNames(nobodyWants.map(displayName))} als Sitznachbarn gewünscht. ` +
-        'Der Plan versucht trotzdem, die eigenen Wünsche dieser Personen zu erfüllen — ' +
-        'ein Blick lohnt sich aber.',
+      message: msg('validation.nobodyWants', { names: nobodyWants.map(displayName) }),
       studentIds: nobodyWants.map((s) => s.id),
     });
   }
 
   return { issues, solvable: !issues.some((issue) => issue.severity === 'error') };
-}
-
-function listNames(names: string[]): string {
-  if (names.length === 1) return names[0]!;
-  return names.slice(0, -1).join(', ') + ' und ' + names[names.length - 1]!;
 }
 
 // ---------------------------------------------------------------------------
@@ -207,12 +221,30 @@ function separablePair(problem: SolverProblem, a: number, b: number): boolean {
   return false;
 }
 
+/** Gibt es zulässige Plätze für a und b, die mindestens `threshold` Nähe haben? */
+function nearPairPossible(
+  problem: SolverProblem,
+  a: number,
+  b: number,
+  threshold: number,
+): boolean {
+  const { m, allowed, prox } = problem;
+  for (let s = 0; s < m; s++) {
+    if (allowed[a * m + s] !== 1) continue;
+    for (let t = 0; t < m; t++) {
+      if (s === t || allowed[b * m + t] !== 1) continue;
+      if (prox.values[s * m + t]! >= threshold) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Größte Gruppe von Personen, die paarweise *tischweit* getrennt werden müssen.
  * Eine solche Gruppe braucht ebenso viele Tische. Der Trennungsgraph ist winzig,
  * daher genügt eine einfache erschöpfende Suche (Bron–Kerbosch).
  */
-function largestTableSeparationClique(data: ClassData, problem: SolverProblem): number[] {
+function largestTableSeparationClique(problem: SolverProblem): number[] {
   const adjacency = new Map<number, Set<number>>();
   const addEdge = (a: number, b: number) => {
     if (!adjacency.has(a)) adjacency.set(a, new Set());
@@ -221,12 +253,9 @@ function largestTableSeparationClique(data: ClassData, problem: SolverProblem): 
     adjacency.get(b)!.add(a);
   };
 
-  for (const separation of data.separations) {
+  for (const separation of problem.separations) {
     if (separation.radius !== 'table') continue;
-    const a = problem.studentIndex.get(separation.a);
-    const b = problem.studentIndex.get(separation.b);
-    if (a === undefined || b === undefined || a === b) continue;
-    addEdge(a, b);
+    addEdge(separation.a, separation.b);
   }
 
   let best: number[] = [];

@@ -5,16 +5,14 @@
 import { useState } from 'react';
 
 import { buildRoom } from '../domain/roomTemplates';
+import { useI18n } from '../i18n/I18nContext';
 import type { ClassStore } from '../state/store';
 import type { NameDisplay } from '../types/model';
 
-const DISPLAY_LABELS: Record<NameDisplay, string> = {
-  full: 'Vor- und Nachname',
-  firstName: 'nur Vorname',
-  initial: 'Vorname + Anfangsbuchstabe',
-};
+const DISPLAY_MODES: NameDisplay[] = ['full', 'firstName', 'initial'];
 
 export function StudentTable({ store }: { store: ClassStore }) {
+  const { t } = useI18n();
   const [bulk, setBulk] = useState('');
   const students = store.data.students;
   const seatCount = buildRoom(store.data.room).seats.length;
@@ -32,64 +30,62 @@ export function StudentTable({ store }: { store: ClassStore }) {
   return (
     <div className="columns">
       <div className="panel">
-        <h2>Namen hinzufügen</h2>
+        <h2>{t('class.addNames')}</h2>
         <div className="field">
-          <label htmlFor="bulk">Ein Name je Zeile</label>
+          <label htmlFor="bulk">{t('class.onePerLine')}</label>
           <textarea
             id="bulk"
             value={bulk}
-            placeholder={'Amelie Bauer\nBen Cordes\nCharlotte Dietz'}
+            placeholder={t('class.placeholder')}
             onChange={(event) => setBulk(event.target.value)}
           />
         </div>
         <div className="button-row">
           <button type="button" className="button primary" onClick={addBulk} disabled={!bulk.trim()}>
-            Hinzufügen
+            {t('class.add')}
           </button>
         </div>
         <p className="hint" style={{ marginTop: 12 }}>
-          Sie können die Liste auch aus einer Tabelle einfügen — Zeilenumbrüche, Kommas und
-          Semikolons trennen die Namen. Das erste Wort gilt als Vorname, der Rest als Nachname.
+          {t('class.pasteHint')}
         </p>
 
         <div className="field" style={{ marginTop: 18 }}>
-          <label htmlFor="nameDisplay">Namen anzeigen als</label>
+          <label htmlFor="nameDisplay">{t('class.displayAs')}</label>
           <select
             id="nameDisplay"
             value={store.data.nameDisplay}
             onChange={(event) => store.setNameDisplay(event.target.value as NameDisplay)}
           >
-            {(Object.keys(DISPLAY_LABELS) as NameDisplay[]).map((mode) => (
+            {DISPLAY_MODES.map((mode) => (
               <option key={mode} value={mode}>
-                {DISPLAY_LABELS[mode]}
+                {t(`class.display.${mode}`)}
               </option>
             ))}
           </select>
           <p className="hint" style={{ marginTop: 6 }}>
-            Gilt für Bildschirm und Ausdruck. Für einen Aushang im Klassenraum reicht meist der
-            Vorname — je weniger personenbezogene Daten sichtbar sind, desto besser.
+            {t('class.displayHint')}
           </p>
         </div>
       </div>
 
       <div className="panel">
         <h2>
-          Klasse{' '}
+          {t('class.heading')}{' '}
           <span className="hint">
-            ({students.length} {students.length === 1 ? 'Person' : 'Personen'}, {seatCount} Plätze)
+            ({t('class.count', { count: students.length, seats: seatCount })})
           </span>
         </h2>
 
         {students.length === 0 ? (
-          <p className="hint">Noch keine Namen erfasst.</p>
+          <p className="hint">{t('class.none')}</p>
         ) : (
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
                   <th style={{ width: '2.5em' }}>#</th>
-                  <th>Vorname</th>
-                  <th>Nachname</th>
+                  <th>{t('class.firstName')}</th>
+                  <th>{t('class.lastName')}</th>
                   <th style={{ width: '4em' }} />
                 </tr>
               </thead>
@@ -101,7 +97,7 @@ export function StudentTable({ store }: { store: ClassStore }) {
                       <input
                         type="text"
                         value={student.firstName}
-                        aria-label={`Vorname von ${student.firstName}`}
+                        aria-label={t('class.firstNameOf', { name: student.firstName })}
                         onChange={(event) =>
                           store.updateStudent(student.id, { firstName: event.target.value })
                         }
@@ -111,7 +107,7 @@ export function StudentTable({ store }: { store: ClassStore }) {
                       <input
                         type="text"
                         value={student.lastName ?? ''}
-                        aria-label={`Nachname von ${student.firstName}`}
+                        aria-label={t('class.lastNameOf', { name: student.firstName })}
                         onChange={(event) =>
                           store.updateStudent(student.id, { lastName: event.target.value })
                         }
@@ -122,8 +118,8 @@ export function StudentTable({ store }: { store: ClassStore }) {
                         type="button"
                         className="button danger"
                         onClick={() => store.removeStudent(student.id)}
-                        aria-label={`${student.firstName} entfernen`}
-                        title="Entfernen — löscht auch alle Wünsche und Trennungen zu dieser Person"
+                        aria-label={t('class.remove', { name: student.firstName })}
+                        title={t('class.removeTitle')}
                       >
                         ✕
                       </button>

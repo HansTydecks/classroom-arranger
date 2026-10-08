@@ -10,6 +10,13 @@ import type { ClassData } from '../types/model';
 
 const FORMAT = 'classroom-arranger/1';
 
+/** Fehler beim Einlesen einer Sicherung; `key` ist ein Übersetzungsschlüssel. */
+export class ImportError extends Error {
+  constructor(readonly key: string) {
+    super(key);
+  }
+}
+
 export function downloadClass(data: ClassData): void {
   const payload = JSON.stringify({ format: FORMAT, exportedAt: new Date().toISOString(), data }, null, 2);
   const blob = new Blob([payload], { type: 'application/json' });
@@ -18,26 +25,26 @@ export function downloadClass(data: ClassData): void {
 
   const stamp = new Date().toISOString().slice(0, 10);
   link.href = url;
-  link.download = `sitzplan-${slug(data.name) || 'klasse'}-${stamp}.json`;
+  link.download = `seating-plan-${slug(data.name) || 'class'}-${stamp}.json`;
   link.click();
 
   URL.revokeObjectURL(url);
 }
 
-/** Liest eine zuvor gesicherte Datei. Wirft mit einer verständlichen Meldung. */
+/** Liest eine zuvor gesicherte Datei. Wirft einen `ImportError`. */
 export async function readClassFile(file: File): Promise<ClassData> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text());
   } catch {
-    throw new Error('Die Datei ist keine gültige JSON-Datei.');
+    throw new ImportError('import.invalidJson');
   }
 
   const wrapper = parsed as { format?: string; data?: ClassData };
   const data = wrapper?.format === FORMAT ? wrapper.data : (parsed as ClassData);
 
   if (!data || !Array.isArray(data.students) || !data.room) {
-    throw new Error('Die Datei enthält keine Klassendaten dieses Programms.');
+    throw new ImportError('import.noClassData');
   }
   return data;
 }

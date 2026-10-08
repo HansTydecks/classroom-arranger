@@ -215,7 +215,7 @@ export function constructPairFirst(p: SolverProblem, rng: Rng): Int32Array | nul
   return fillGreedy(p, state, rng) ? state.seatOf : null;
 }
 
-/** Gegenseitige Wunschpaare, absteigend nach gemeinsamem Gewicht. */
+/** Gegenseitige Wunschpaare und harte Nachbarpaare, absteigend nach Gewicht. */
 function mutualPairs(p: SolverProblem, rng: Rng): Array<[number, number]> {
   const pairs: Array<{ i: number; j: number; weight: number }> = [];
 
@@ -229,6 +229,11 @@ function mutualPairs(p: SolverProblem, rng: Rng): Array<[number, number]> {
       }
       if (back > 0) pairs.push({ i, j, weight: p.wishBase[k]! + back + rng() });
     }
+  }
+
+  // Harte „muss neben X“-Regeln haben Vorrang vor allen Wünschen.
+  for (const { a, b } of p.togetherRules) {
+    pairs.push({ i: Math.min(a, b), j: Math.max(a, b), weight: 1e6 + rng() });
   }
 
   pairs.sort((a, b) => b.weight - a.weight);

@@ -58,7 +58,7 @@ describe('Vorabprüfung', () => {
     );
     const result = check(data);
     expect(result.solvable).toBe(false);
-    expect(result.issues.some((i) => i.message.includes('Es fehlen 1 Plätze'))).toBe(true);
+    expect(result.issues.some((i) => i.message.key === 'validation.seatsMissing' && i.message.params?.missing === 1)).toBe(true);
   });
 
   it('meldet eine Person, für die kein Platz zulässig ist', () => {
@@ -93,11 +93,11 @@ describe('Vorabprüfung', () => {
     const result = check(data);
     expect(result.solvable).toBe(false);
 
-    const issue = result.issues.find((i) => i.message.includes('benötigen wegen harter Vorgaben'));
+    const issue = result.issues.find((i) => i.message.key === 'validation.oversubscribed');
     expect(issue).toBeDefined();
     // Genau die fünf Betroffenen werden benannt, nicht die übrigen.
     expect(issue!.studentIds?.sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
-    expect(issue!.message).toContain('nur 4');
+    expect(issue!.message.params?.seats).toBe(4);
   });
 
   it('erkennt eine unerfüllbare Trennung', () => {
@@ -108,7 +108,7 @@ describe('Vorabprüfung', () => {
     );
     const result = check(data);
     expect(result.solvable).toBe(false);
-    expect(result.issues.some((i) => i.message.includes('lassen sich nicht trennen'))).toBe(true);
+    expect(result.issues.some((i) => i.message.key === 'validation.cannotSeparate')).toBe(true);
   });
 
   it('erkennt eine Trennungs-Gruppe, die mehr Tische braucht als vorhanden', () => {
@@ -123,7 +123,7 @@ describe('Vorabprüfung', () => {
     );
     const result = check(data);
     expect(result.solvable).toBe(false);
-    expect(result.issues.some((i) => i.message.includes('nur 2 Tische'))).toBe(true);
+    expect(result.issues.some((i) => i.message.key === 'validation.tableClique' && i.message.params?.tables === 2)).toBe(true);
   });
 
   it('warnt, wenn kein Platz frei bleibt', () => {
@@ -133,13 +133,13 @@ describe('Vorabprüfung', () => {
     );
     const result = check(data);
     expect(result.solvable).toBe(true);
-    expect(result.issues.some((i) => i.message.includes('Alle Plätze sind belegt'))).toBe(true);
+    expect(result.issues.some((i) => i.message.key === 'validation.allSeatsTaken')).toBe(true);
   });
 
   it('warnt bei Wünschen auf unbekannte Namen', () => {
     const data = classWith([{ id: 'a', wishes: ['gibtesnicht'] }, { id: 'b' }]);
     const result = check(data);
     expect(result.solvable).toBe(true);
-    expect(result.issues.some((i) => i.message.includes('unbekannten Namen'))).toBe(true);
+    expect(result.issues.some((i) => i.message.key === 'warn.wishUnknown')).toBe(true);
   });
 });

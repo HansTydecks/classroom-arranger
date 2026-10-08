@@ -8,10 +8,14 @@
 
 import { buildProximityMatrix, SEPARATION_THRESHOLD } from '../domain/proximity';
 import type { ProximityMatrix } from '../domain/proximity';
+import { isApartRule, isPairRule, pairRadius } from '../domain/rules';
+import { msg } from '../i18n/message';
+import type { Msg } from '../i18n/message';
 import type {
   ClassData,
   RoomLayout,
   Seat,
+  SpecialKind,
   SpecialRequest,
   Student,
   Weights,
@@ -59,17 +63,49 @@ export interface SolverProblem {
   sepPartner: Int32Array;
   /** Verbotene Nähe: Platzpaare mit `w >= sepThreshold` sind untersagt. */
   sepThreshold: Float64Array;
+  /** Alle harten Trennungen einmal je Paar — für Vorabprüfung und Bericht. */
+  separations: SeparationPair[];
+
+  /**
+   * Weiche und „muss zusammen“-Beziehungsregeln im CSR-Format über die Person, die
+   * die Regel trägt. Der Wert gehört nur zu dieser Person (nicht zum Partner).
+   */
+  pairStart: Int32Array;
+  pairPartner: Int32Array;
+  /** Nähe, ab der die Regel als erfüllt gilt. */
+  pairThreshold: Float64Array;
+  /** `PAIR_*`-Modus der Regel. */
+  pairMode: Int8Array;
+  /** Gewicht des Bonus bzw. Malus (nur weiche Modi). */
+  pairWeight: Float64Array;
+  /** Regeln im Klartext, parallel zu den CSR-Feldern — für den Bericht. */
+  pairKind: SpecialKind[];
+  /** Hartes „zusammen“: Gesamtliste je Paar für Vorabprüfung und Bericht. */
+  togetherRules: Array<{ a: number; b: number; threshold: number }>;
 }
+
+export interface SeparationPair {
+  a: number;
+  b: number;
+  radius: 'adjacent' | 'table';
+}
+
+/** Weiche Regel „soll nah beieinander sitzen“: Bonus, graduell mit der Nähe. */
+export const PAIR_WANT_NEAR = 1;
+/** Harte Regel „muss nah beieinander sitzen“: sehr hohe Strafe, wenn nicht erfüllt. */
+export const PAIR_MUST_NEAR = 2;
+/** Weiche Regel „soll nicht nah beieinander sitzen“: Malus, wenn doch. */
+export const PAIR_WANT_APART = 3;
 
 export interface CompileResult {
   problem: SolverProblem;
   /** Hinweise auf ignorierte Eingaben (unbekannte Namen, Selbstwünsche, Dubletten). */
-  warnings: string[];
+  warnings: Msg[];
 }
 
 /** Baut die Solver-Darstellung aus Klassendaten und fertigem Raumlayout. */
 export function compileProblem(data: ClassData, room: RoomLayout): CompileResult {
-  const warnings: string[] = [];
+  const warnings: Msg[] = [];
   const students = data.students;
   const n = students.length;
   const seats = room.seats;
@@ -94,15 +130,15 @@ export function compileProblem(data: ClassData, room: RoomLayout): CompileResult
       if (!wishId) return;
       const target = studentIndex.get(wishId);
       if (target === undefined) {
-        warnings.push(`${displayName(student)}: Wunsch verweist auf einen unbekannten Namen.`);
+        warnings.push(msg('warn.wishUnknown', { name: displayName(student) }));
         return;
       }
       if (target === i) {
-        warnings.push(`${displayName(student)}: Wunsch auf sich selbst wird ignoriert.`);
+        warnings.push(msg('warn.wishSelf', { name: displayName(student) }));
         return;
       }
       if (seen.has(target)) {
-        warnings.push(`${displayName(student)}: Doppelter Wunsch wird nur einmal gezählt.`);
+        warnings.push(msg('warn.wishDuplicate', { name: displayName(student) }));
         return;
       }
       seen.add(target);
@@ -159,7 +195,7 @@ export function compileProblem(data: ClassData, room: RoomLayout): CompileResult
     const student = students[i]!;
     const pinned = student.pinnedSeat ? seatIndex.get(student.pinnedSeat) : undefined;
     if (student.pinnedSeat && pinned === undefined) {
-      warnings.push(`${displayName(student)}: Fester Platz existiert im Raum nicht mehr.`);
+      warnings.push(msg('warn.pinnedMissing', { name: displayName(student) }));
     }
 
     for (let s = 0; s < m; s++) {
@@ -168,6 +204,8 @@ export function compileProblem(data: ClassData, room: RoomLayout): CompileResult
       let ok = pinned === undefined || pinned === s;
 
       for (const special of student.specials) {
+        // Beziehungsregeln betreffen kein einzelnes Platzmerkmal.
+        if (isPairRule(special.kind)) continue;
         if (special.hard) {
           if (!specialAllows(special, seat, room)) ok = false;
         } else {
@@ -181,28 +219,96 @@ export function compileProblem(data: ClassData, room: RoomLayout): CompileResult
     }
 
     if (domainSize[i] === 0) {
-      warnings.push(
-        `${displayName(student)}: Die harten Vorgaben lassen keinen einzigen Platz zu.`,
-      );
+      warnings.push(msg('warn.noSeatAllowed', { name: displayName(student) }));
     }
   }
 
-  // --- Harte Trennungen -----------------------------------------------------
+  // --- Beziehungsregeln: Trennungen und Nachbarwünsche -----------------------
+
+  const separations: SeparationPair[] = [];
+  const sepSeen = new Set<string>();
+  const addSeparation = (a: number, b: number, radius: 'adjacent' | 'table') => {
+    const key = `${Math.min(a, b)}:${Math.max(a, b)}:${radius}`;
+    if (sepSeen.has(key)) return;
+    sepSeen.add(key);
+    separations.push({ a, b, radius });
+  };
+
+  // Alte Form: Trennungen als eigene Liste.
+  for (const sep of data.separations ?? []) {
+    const a = studentIndex.get(sep.a);
+    const b = studentIndex.get(sep.b);
+    if (a === undefined || b === undefined || a === b) {
+      warnings.push(msg('warn.separationUnknown'));
+      continue;
+    }
+    addSeparation(a, b, sep.radius);
+  }
+
+  const pairLists: Array<
+    Array<{ partner: number; threshold: number; mode: number; weight: number; kind: SpecialKind }>
+  > = Array.from({ length: n }, () => []);
+  const ruleBy: number[][] = Array.from({ length: n }, () => []);
+  const togetherRules: SolverProblem['togetherRules'] = [];
+
+  for (let i = 0; i < n; i++) {
+    for (const rule of students[i]!.specials) {
+      if (!isPairRule(rule.kind)) continue;
+      const target = rule.target ? studentIndex.get(rule.target) : undefined;
+      if (target === undefined) {
+        warnings.push(msg('warn.ruleUnknown', { name: displayName(students[i]!) }));
+        continue;
+      }
+      if (target === i) {
+        warnings.push(msg('warn.ruleSelf', { name: displayName(students[i]!) }));
+        continue;
+      }
+
+      const radius = pairRadius(rule.kind);
+      const threshold = SEPARATION_THRESHOLD[radius];
+
+      if (isApartRule(rule.kind)) {
+        if (rule.hard) {
+          addSeparation(i, target, radius);
+          continue;
+        }
+        pairLists[i]!.push({
+          partner: target,
+          threshold,
+          mode: PAIR_WANT_APART,
+          weight: weights.specialBonus,
+          kind: rule.kind,
+        });
+      } else if (rule.hard) {
+        pairLists[i]!.push({
+          partner: target,
+          threshold,
+          mode: PAIR_MUST_NEAR,
+          weight: 0,
+          kind: rule.kind,
+        });
+        togetherRules.push({ a: i, b: target, threshold });
+      } else {
+        pairLists[i]!.push({
+          partner: target,
+          threshold,
+          mode: PAIR_WANT_NEAR,
+          weight: weights.specialBonus,
+          kind: rule.kind,
+        });
+      }
+      ruleBy[target]!.push(i);
+    }
+  }
 
   const sepLists: Array<Array<{ partner: number; threshold: number }>> = Array.from(
     { length: n },
     () => [],
   );
-  for (const sep of data.separations) {
-    const a = studentIndex.get(sep.a);
-    const b = studentIndex.get(sep.b);
-    if (a === undefined || b === undefined || a === b) {
-      warnings.push('Eine Trennung verweist auf einen unbekannten Namen und wird ignoriert.');
-      continue;
-    }
+  for (const sep of separations) {
     const threshold = SEPARATION_THRESHOLD[sep.radius];
-    sepLists[a]!.push({ partner: b, threshold });
-    sepLists[b]!.push({ partner: a, threshold });
+    sepLists[sep.a]!.push({ partner: sep.b, threshold });
+    sepLists[sep.b]!.push({ partner: sep.a, threshold });
   }
 
   const sepStart = new Int32Array(n + 1);
@@ -216,6 +322,40 @@ export function compileProblem(data: ClassData, room: RoomLayout): CompileResult
     }
   }
   sepStart[n] = sepPartnerList.length;
+
+  const pairStart = new Int32Array(n + 1);
+  const pairPartnerList: number[] = [];
+  const pairThresholdList: number[] = [];
+  const pairModeList: number[] = [];
+  const pairWeightList: number[] = [];
+  const pairKind: SpecialKind[] = [];
+  for (let i = 0; i < n; i++) {
+    pairStart[i] = pairPartnerList.length;
+    for (const entry of pairLists[i]!) {
+      pairPartnerList.push(entry.partner);
+      pairThresholdList.push(entry.threshold);
+      pairModeList.push(entry.mode);
+      pairWeightList.push(entry.weight);
+      pairKind.push(entry.kind);
+    }
+  }
+  pairStart[n] = pairPartnerList.length;
+
+  // Wer eine Beziehungsregel zu j trägt, ist betroffen, wenn j den Platz wechselt.
+  const affectedWithRules: number[] = [];
+  const affectedStartWithRules = new Int32Array(n + 1);
+  for (let i = 0; i < n; i++) {
+    affectedStartWithRules[i] = affectedWithRules.length;
+    for (let a = affectedStart[i]!; a < affectedStart[i + 1]!; a++) {
+      affectedWithRules.push(affectedList[a]!);
+    }
+    for (const holder of ruleBy[i]!) {
+      if (!affectedWithRules.includes(holder, affectedStartWithRules[i]!)) {
+        affectedWithRules.push(holder);
+      }
+    }
+  }
+  affectedStartWithRules[n] = affectedWithRules.length;
 
   return {
     problem: {
@@ -231,16 +371,24 @@ export function compileProblem(data: ClassData, room: RoomLayout): CompileResult
       wishTarget,
       wishBase,
       wishRank,
-      affectedStart,
-      affected: Int32Array.from(affectedList),
+      affectedStart: affectedStartWithRules,
+      affected: Int32Array.from(affectedWithRules),
       unary,
       allowed,
       domainSize,
       sepStart,
       sepPartner: Int32Array.from(sepPartnerList),
       sepThreshold: Float64Array.from(sepThresholdList),
+      separations,
+      pairStart,
+      pairPartner: Int32Array.from(pairPartnerList),
+      pairThreshold: Float64Array.from(pairThresholdList),
+      pairMode: Int8Array.from(pairModeList),
+      pairWeight: Float64Array.from(pairWeightList),
+      pairKind,
+      togetherRules,
     },
-    warnings: [...new Set(warnings)],
+    warnings: dedupe(warnings),
   };
 }
 
@@ -248,30 +396,57 @@ export function compileProblem(data: ClassData, room: RoomLayout): CompileResult
 // Sonderwünsche
 // ---------------------------------------------------------------------------
 
-/** Erfüllt der Platz einen *harten* Sonderwunsch? */
+/** Mittlere Rasterspalte; Bezugspunkt für links / rechts / Mitte. */
+function middleColumn(room: RoomLayout): number {
+  return (room.gridCols - 1) / 2;
+}
+
+/** Erfüllt der Platz einen *harten* Platzwunsch? Beziehungsregeln erlauben jeden Platz. */
 export function specialAllows(
   special: SpecialRequest,
   seat: Seat,
   room: RoomLayout,
 ): boolean {
+  const middle = middleColumn(room);
   switch (special.kind) {
     case 'front':
       return seat.tableRow === 0;
     case 'notBack':
       return !seat.tags.includes('back');
-    case 'window':
-      return seat.tags.includes('window');
-    case 'aisle':
-      return seat.tags.includes('aisle');
-    case 'notDoor':
-      return !seat.tags.includes('door');
+    case 'back':
+      return seat.tags.includes('back');
     case 'maxRow':
       return seat.tableRow <= (special.row ?? room.tableRowCount - 1);
+    case 'minRow':
+      return seat.tableRow >= (special.row ?? 0);
+    case 'leftSide':
+      return seat.col <= middle;
+    case 'rightSide':
+      return seat.col >= middle;
+    case 'center':
+      return Math.abs(seat.col - middle) <= middle / 2;
+    case 'window':
+      return seat.tags.includes('window');
+    case 'notWindow':
+      return !seat.tags.includes('window');
+    case 'aisle':
+      return seat.tags.includes('aisle');
+    case 'notAisle':
+      return !seat.tags.includes('aisle');
+    case 'nearDoor':
+      return seat.tags.includes('door');
+    case 'notDoor':
+      return !seat.tags.includes('door');
+    case 'notNextTo':
+    case 'notSameTable':
+    case 'nextTo':
+    case 'sameTable':
+      return true;
   }
 }
 
 /**
- * Bonus für einen *weichen* Sonderwunsch. Gestuft statt binär, damit Reihe 2 besser
+ * Bonus für einen *weichen* Platzwunsch. Gestuft statt binär, damit Reihe 2 besser
  * bewertet wird als Reihe 5, wenn Reihe 1 schon voll ist.
  */
 export function specialBonus(
@@ -281,32 +456,68 @@ export function specialBonus(
   base: number,
 ): number {
   const lastRow = Math.max(1, room.tableRowCount - 1);
+  const middle = middleColumn(room);
+  const lastCol = Math.max(1, room.gridCols - 1);
 
   switch (special.kind) {
     case 'front':
       return base * (1 - seat.tableRow / lastRow);
     case 'notBack':
       return seat.tags.includes('back') ? -base : 0;
-    case 'window': {
-      if (seat.tags.includes('window')) return base;
-      return inWindowHalf(seat, room) ? base * 0.375 : 0;
-    }
-    case 'aisle':
-      return seat.tags.includes('aisle') ? base : 0;
-    case 'notDoor':
-      return seat.tags.includes('door') ? -base : 0;
+    case 'back':
+      return base * (seat.tableRow / lastRow);
     case 'maxRow': {
       const limit = special.row ?? room.tableRowCount - 1;
       return seat.tableRow > limit ? -base : 0;
     }
+    case 'minRow': {
+      const limit = special.row ?? 0;
+      return seat.tableRow < limit ? -base : 0;
+    }
+    case 'leftSide':
+      return base * (1 - seat.col / lastCol);
+    case 'rightSide':
+      return base * (seat.col / lastCol);
+    case 'center':
+      return base * (1 - Math.abs(seat.col - middle) / Math.max(1, middle));
+    case 'window': {
+      if (seat.tags.includes('window')) return base;
+      return inWindowHalf(seat, room) ? base * 0.375 : 0;
+    }
+    case 'notWindow':
+      return seat.tags.includes('window') ? -base : 0;
+    case 'aisle':
+      return seat.tags.includes('aisle') ? base : 0;
+    case 'notAisle':
+      return seat.tags.includes('aisle') ? -base : 0;
+    case 'nearDoor':
+      return seat.tags.includes('door') ? base : 0;
+    case 'notDoor':
+      return seat.tags.includes('door') ? -base : 0;
+    case 'notNextTo':
+    case 'notSameTable':
+    case 'nextTo':
+    case 'sameTable':
+      return 0;
   }
 }
 
 function inWindowHalf(seat: Seat, room: RoomLayout): boolean {
   const side = room.config.windowSide;
   if (side === 'none') return false;
-  const middle = (room.gridCols - 1) / 2;
+  const middle = middleColumn(room);
   return side === 'left' ? seat.col < middle : seat.col > middle;
+}
+
+/** Entfernt doppelte Meldungen (gleicher Schlüssel, gleiche Parameter). */
+function dedupe(messages: Msg[]): Msg[] {
+  const seen = new Set<string>();
+  return messages.filter((message) => {
+    const key = JSON.stringify(message);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function displayName(student: Student): string {

@@ -8,12 +8,12 @@
 
 import { useState } from 'react';
 
+import { useI18n } from '../i18n/I18nContext';
 import type { ClassStore } from '../state/store';
 import type { Weights } from '../types/model';
 
 interface SliderSpec {
-  label: string;
-  hint: string;
+  id: string;
   min: number;
   max: number;
   step: number;
@@ -23,8 +23,7 @@ interface SliderSpec {
 
 const SLIDERS: SliderSpec[] = [
   {
-    label: 'Fairness',
-    hint: 'Wie stark eine Person ins Gewicht fällt, für die kein einziger Wunsch aufgeht. Hoch = niemand geht leer aus, notfalls auf Kosten der Gesamtzahl.',
+    id: 'fairness',
     min: 0,
     max: 60,
     step: 1,
@@ -32,8 +31,7 @@ const SLIDERS: SliderSpec[] = [
     set: (value) => ({ noWishPenalty: value }),
   },
   {
-    label: 'Gegenseitigkeit',
-    hint: 'Zuschlag für Wünsche, die auf Gegenseitigkeit beruhen. Hoch = echte Freundschaftspaare gehen vor einseitigen Wünschen.',
+    id: 'mutual',
     min: 1,
     max: 3,
     step: 0.1,
@@ -41,8 +39,7 @@ const SLIDERS: SliderSpec[] = [
     set: (value) => ({ mutualFactor: value }),
   },
   {
-    label: 'Erstwunsch',
-    hint: 'Grundwert eines erfüllten Erstwunsches. Der Zweit- und Drittwunsch bleiben im Verhältnis dazu.',
+    id: 'first',
     min: 1,
     max: 20,
     step: 1,
@@ -56,8 +53,7 @@ const SLIDERS: SliderSpec[] = [
     }),
   },
   {
-    label: 'Sonderwünsche',
-    hint: 'Gewicht der weichen Sonderwünsche (Fenster, vorne, Gang) gegenüber den Sitznachbar-Wünschen.',
+    id: 'rules',
     min: 0,
     max: 25,
     step: 1,
@@ -65,8 +61,7 @@ const SLIDERS: SliderSpec[] = [
     set: (value) => ({ specialBonus: value }),
   },
   {
-    label: 'Zweiter Wunsch derselben Person',
-    hint: 'Anteil, mit dem ein zweiter erfüllter Wunsch derselben Person zählt. Niedrig = die Erfüllung verteilt sich gleichmäßiger über die Klasse.',
+    id: 'diminishing',
     min: 0,
     max: 1,
     step: 0.05,
@@ -84,6 +79,7 @@ interface WeightSlidersProps {
 }
 
 export function WeightSliders({ store, onRecalculate, disabled }: WeightSlidersProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const weights = store.data.weights;
 
@@ -96,24 +92,21 @@ export function WeightSliders({ store, onRecalculate, disabled }: WeightSlidersP
           onClick={() => setOpen((current) => !current)}
           aria-expanded={open}
         >
-          {open ? '▾' : '▸'} Gewichtung anpassen
+          {open ? '▾' : '▸'} {t('weights.title')}
         </button>
       </h2>
 
       {open && (
         <>
-          <p className="hint">
-            Nach dem Verschieben muss neu gerechnet werden. Die Voreinstellung entspricht dem
-            Profil „Fairness zuerst“.
-          </p>
+          <p className="hint">{t('weights.hint')}</p>
 
           {SLIDERS.map((slider) => (
-            <div className="field" key={slider.label}>
-              <label htmlFor={`weight-${slider.label}`}>
-                {slider.label}: <strong>{slider.get(weights)}</strong>
+            <div className="field" key={slider.id}>
+              <label htmlFor={`weight-${slider.id}`}>
+                {t(`weights.${slider.id}.label`)}: <strong>{slider.get(weights)}</strong>
               </label>
               <input
-                id={`weight-${slider.label}`}
+                id={`weight-${slider.id}`}
                 type="range"
                 min={slider.min}
                 max={slider.max}
@@ -121,7 +114,7 @@ export function WeightSliders({ store, onRecalculate, disabled }: WeightSlidersP
                 value={slider.get(weights)}
                 onChange={(event) => store.setWeights(slider.set(Number(event.target.value)))}
               />
-              <p className="hint">{slider.hint}</p>
+              <p className="hint">{t(`weights.${slider.id}.hint`)}</p>
             </div>
           ))}
 
@@ -132,10 +125,10 @@ export function WeightSliders({ store, onRecalculate, disabled }: WeightSlidersP
               onClick={onRecalculate}
               disabled={disabled}
             >
-              Mit neuer Gewichtung rechnen
+              {t('weights.recalculate')}
             </button>
             <button type="button" className="button" onClick={store.resetWeights}>
-              Voreinstellung wiederherstellen
+              {t('weights.reset')}
             </button>
           </div>
         </>

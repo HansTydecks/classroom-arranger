@@ -2,27 +2,17 @@
  * Schritt 1: Das Klassenzimmer nachbauen.
  */
 
-import { buildRoom, TEMPLATE_DEFAULTS, TEMPLATE_LABELS } from '../domain/roomTemplates';
+import { buildRoom, TEMPLATE_DEFAULTS, TEMPLATE_IDS } from '../domain/roomTemplates';
+import { useI18n } from '../i18n/I18nContext';
 import { SeatGrid } from './SeatGrid';
 import type { ClassStore } from '../state/store';
 import type { DoorPosition, RoomTemplateId, WindowSide } from '../types/model';
 
-const TEMPLATE_IDS = Object.keys(TEMPLATE_LABELS) as RoomTemplateId[];
-
-const WINDOW_LABELS: Record<WindowSide, string> = {
-  left: 'links',
-  right: 'rechts',
-  none: 'kein Fenster berücksichtigen',
-};
-
-const DOOR_LABELS: Record<DoorPosition, string> = {
-  frontLeft: 'vorne links',
-  frontRight: 'vorne rechts',
-  backLeft: 'hinten links',
-  backRight: 'hinten rechts',
-};
+const WINDOW_SIDES: WindowSide[] = ['left', 'right', 'none'];
+const DOOR_POSITIONS: DoorPosition[] = ['frontLeft', 'frontRight', 'backLeft', 'backRight'];
 
 export function RoomEditor({ store }: { store: ClassStore }) {
+  const { t } = useI18n();
   const { room } = store.data;
   const layout = buildRoom(room);
   const seatCount = layout.seats.length;
@@ -33,10 +23,10 @@ export function RoomEditor({ store }: { store: ClassStore }) {
   return (
     <div className="columns">
       <div className="panel">
-        <h2>Klassenzimmer</h2>
+        <h2>{t('room.title')}</h2>
 
         <div className="field">
-          <label htmlFor="template">Anordnung</label>
+          <label htmlFor="template">{t('room.layout')}</label>
           <select
             id="template"
             value={room.template}
@@ -47,7 +37,7 @@ export function RoomEditor({ store }: { store: ClassStore }) {
           >
             {TEMPLATE_IDS.map((id) => (
               <option key={id} value={id}>
-                {TEMPLATE_LABELS[id]}
+                {t(`room.template.${id}`)}
               </option>
             ))}
           </select>
@@ -55,7 +45,7 @@ export function RoomEditor({ store }: { store: ClassStore }) {
 
         <div className="field-row">
           <div className="field">
-            <label htmlFor="rowCount">{isUShape ? 'Plätze je Seitenarm' : 'Tischreihen'}</label>
+            <label htmlFor="rowCount">{isUShape ? t('room.armSeats') : t('room.rows')}</label>
             <input
               id="rowCount"
               type="number"
@@ -67,7 +57,7 @@ export function RoomEditor({ store }: { store: ClassStore }) {
           </div>
           <div className="field">
             <label htmlFor="tablesPerRow">
-              {isUShape ? 'Tische hinten' : 'Tische je Reihe'}
+              {isUShape ? t('room.backTables') : t('room.tablesPerRow')}
             </label>
             <input
               id="tablesPerRow"
@@ -79,7 +69,7 @@ export function RoomEditor({ store }: { store: ClassStore }) {
             />
           </div>
           <div className="field">
-            <label htmlFor="seatsPerTable">Plätze je Tisch</label>
+            <label htmlFor="seatsPerTable">{t('room.seatsPerTable')}</label>
             <input
               id="seatsPerTable"
               type="number"
@@ -92,22 +82,22 @@ export function RoomEditor({ store }: { store: ClassStore }) {
         </div>
 
         <div className="field">
-          <label htmlFor="windowSide">Fensterseite</label>
+          <label htmlFor="windowSide">{t('room.windowSide')}</label>
           <select
             id="windowSide"
             value={room.windowSide}
             onChange={(event) => store.setRoom({ windowSide: event.target.value as WindowSide })}
           >
-            {(Object.keys(WINDOW_LABELS) as WindowSide[]).map((side) => (
+            {WINDOW_SIDES.map((side) => (
               <option key={side} value={side}>
-                {WINDOW_LABELS[side]}
+                {t(`room.window.${side}`)}
               </option>
             ))}
           </select>
         </div>
 
         <div className="field">
-          <label htmlFor="doorPosition">Tür</label>
+          <label htmlFor="doorPosition">{t('room.door')}</label>
           <select
             id="doorPosition"
             value={room.doorPosition}
@@ -115,36 +105,27 @@ export function RoomEditor({ store }: { store: ClassStore }) {
               store.setRoom({ doorPosition: event.target.value as DoorPosition })
             }
           >
-            {(Object.keys(DOOR_LABELS) as DoorPosition[]).map((position) => (
+            {DOOR_POSITIONS.map((position) => (
               <option key={position} value={position}>
-                {DOOR_LABELS[position]}
+                {t(`room.doorPos.${position}`)}
               </option>
             ))}
           </select>
         </div>
 
-        <p className="hint">
-          Die Angaben gelten aus Sicht der Schülerinnen und Schüler, also mit Blick zur Tafel.
-          Zwischen den Tischblöcken liegt jeweils ein Gang — über ihn hinweg zählen Personen
-          nicht als Sitznachbarn.
-        </p>
+        <p className="hint">{t('room.hint')}</p>
       </div>
 
       <div className="panel">
-        <h2>Vorschau</h2>
+        <h2>{t('room.preview')}</h2>
         <p className={seatCount < studentCount ? 'notice error' : 'hint'}>
-          {seatCount} Plätze
-          {studentCount > 0 && (
-            <>
-              {' für '}
-              {studentCount} {studentCount === 1 ? 'Person' : 'Personen'}
-              {seatCount < studentCount
-                ? ` — es fehlen ${studentCount - seatCount}.`
-                : seatCount === studentCount
-                  ? ' — kein Platz bleibt frei.'
-                  : ` — ${seatCount - studentCount} bleiben frei.`}
-            </>
-          )}
+          {studentCount === 0
+            ? t('room.seatsOnly', { seats: seatCount })
+            : seatCount < studentCount
+              ? t('room.seatsMissing', { seats: seatCount, students: studentCount, missing: studentCount - seatCount })
+              : seatCount === studentCount
+                ? t('room.seatsFull', { seats: seatCount, students: studentCount })
+                : t('room.seatsFree', { seats: seatCount, students: studentCount, free: seatCount - studentCount })}
         </p>
         <SeatGrid room={layout} showTags />
       </div>
